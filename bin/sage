@@ -217,12 +217,13 @@ select_platform() {
   PLATFORMS=()  # additive list — multiple platforms can coexist
 
   # Auto-detect from existing files
-  local has_agent=false has_claude=false has_codex=false has_opencode=false has_gemini=false
+  local has_agent=false has_claude=false has_codex=false has_opencode=false has_gemini=false has_hermes=false
   [ -d "$target/.agent" ] && has_agent=true
   [ -d "$target/.claude" ] && has_claude=true
   [ -d "$target/.codex" ] && has_codex=true
   [ -d "$target/.opencode" ] && has_opencode=true
   [ -d "$target/.gemini" ] && has_gemini=true
+  [ -d "$target/.hermes" ] && has_hermes=true
   # GEMINI.md alone is ambiguous (Antigravity vs Gemini CLI); only count it
   # toward Antigravity if .agent/ also exists (or if .gemini/ doesn't exist).
   if [ -f "$target/GEMINI.md" ] && [ "$has_gemini" = false ]; then
@@ -262,6 +263,7 @@ select_platform() {
   [ "$has_codex" = true ] && PLATFORMS+=("codex")
   [ "$has_opencode" = true ] && PLATFORMS+=("opencode")
   [ "$has_gemini" = true ] && PLATFORMS+=("gemini-cli")
+  [ "$has_hermes" = true ] && PLATFORMS+=("hermes")
 
   # Honor --platform flag (one or more, space- or comma-separated)
   if [ -n "${PLATFORM_FLAG:-}" ]; then
@@ -271,7 +273,7 @@ select_platform() {
     # `--platform ","`) yields an empty FLAG_LIST; bash 3.2 aborts.
     for p in ${FLAG_LIST[@]+"${FLAG_LIST[@]}"}; do
       case "$p" in
-        claude-code|antigravity|codex|opencode|gemini-cli)
+        claude-code|antigravity|codex|opencode|gemini-cli|hermes)
           PLATFORMS+=("$p")
           ;;
         both)
@@ -281,7 +283,7 @@ select_platform() {
           PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli")
           ;;
         *)
-          echo -e "  ${YELLOW}Unknown platform: $p (supported: claude-code, antigravity, codex, opencode, gemini-cli)${RESET}"
+          echo -e "  ${YELLOW}Unknown platform: $p (supported: claude-code, antigravity, codex, opencode, gemini-cli, hermes)${RESET}"
           ;;
       esac
     done
