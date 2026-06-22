@@ -1,11 +1,14 @@
 ---
 name: hermes
-description: >
-  Tier 1 adapter for Hermes Agent with full subagent support, parallel execution,
-  git worktrees, shell hooks via the agent-hooks/ convention, and slash
-  commands. Install = shell-hooks block in config.yaml + allowlist, not
-  a plugin marketplace.
-version: "1.0.0"
+description: >-
+  Tier 1 adapter for NousResearch Hermes Agent. Single sage plugin
+  at ~/.hermes/plugins/sage/ ships 53 SKILL.md files, 5 agent personas,
+  10 reference templates, plugin-internal hooks, and the sage CLI wrapper.
+  Plus 40 top-level skills auto-discovered at ~/.hermes/skills/<n>/.
+  Plus 3 shell hooks at ~/.hermes/agent-hooks/ (on_session_start,
+  post_tool_call, pre_llm_call). Slash commands register via
+  ctx.register_command() in the plugin's __init__.py.
+version: "1.0.9"
 tier: 1
 capabilities:
   subagents: true
@@ -15,7 +18,49 @@ capabilities:
   slash-commands: true
   skill-auto-activation: true
   file-system-access: true
-command-prefix: "/sage"
 install-method: shell-hooks
 supported-os: [linux, macos, windows]
----
+canonical-shape: hermes-plugin
+install-artifacts:
+  - path: AGENTS.md
+    description: Constitution (Hermes reads AGENTS.md, NOT CLAUDE.md)
+  - path: $HERMES_HOME/plugins/sage/
+    description: Single plugin with skills/, agents/, references/, hooks/, scripts/
+  - path: $HERMES_HOME/plugins/sage/skills/
+    description: 53 SKILL.md files (15 slash-commanded + 38 auto-loaded)
+  - path: $HERMES_HOME/plugins/sage/agents/
+    description: 5 persona.md files (analyst, architect, debugger, developer, reviewer)
+  - path: $HERMES_HOME/plugins/sage/references/
+    description: 10 template.md files (decision, spec, plan, manifest, etc.)
+  - path: $HERMES_HOME/plugins/sage/hooks/hooks.json
+    description: Plugin-internal SessionStart + PostToolUse hook wiring
+  - path: $HERMES_HOME/plugins/sage/scripts/sage
+    description: Plugin-internal sage CLI wrapper (full copy of bin/sage)
+  - path: $HERMES_HOME/skills/<n>/
+    description: 40 top-level auto-discovered skills (NOT slash-commanded)
+  - path: $HERMES_HOME/agent-hooks/
+    description: 3 shell hooks + 4 quality gate scripts + gate-modes.yaml
+  - path: $HERMES_HOME/config-snippet-hermes.yaml
+    description: Hook config snippet to merge into active profile's config.yaml
+  - path: $HOME/shell-hooks-allowlist.json
+    description: Consent record auto-updated (NOT $HERMES_HOME/ as upstream docs claim)
+slash-commands:
+  - sage
+  - build
+  - fix
+  - architect
+  - analyze
+  - learn
+  - map
+  - qa
+  - reflect
+  - research
+  - review
+  - status
+  - design
+  - design-review
+  - continue
+shell-hooks:
+  on_session_start: agent-hooks/sage-session-init.sh
+  post_tool_call: agent-hooks/sage-mark-edit.sh
+  pre_llm_call: agent-hooks/sage-inject.sh

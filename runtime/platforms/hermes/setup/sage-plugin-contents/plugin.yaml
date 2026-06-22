@@ -1,0 +1,23 @@
+name: sage
+version: 1.0.9
+description: >-
+  AI skills framework: UNDERSTAND → ENVISION → DELIVER → REFLECT.
+  Process enforcement, 14 workflows, 37 skills, 5 agent personas.
+  Bundled as a single Hermes plugin with auto-discovered skills +
+  slash commands for the 16 workflow entry points.
+author:
+  name: Rei Stewart (adapted from xoai/sage claude-code plugin)
+  url: https://github.com/grimmjoww/sage/tree/feat/hermes-platform-adapter
+license: MIT
+provides_skills: true
+provides_slash_commands: true
+keywords:
+  - framework
+  - workflow
+  - skills
+  - process
+  - product
+  - engineering
+  - design
+  - ux
+  - research
