@@ -13,7 +13,7 @@ sage init
 #    - AGENTS.md (constitution, replaces CLAUDE.md)
 #    - $HERMES_HOME/plugins/sage/  (ONE plugin with skills/, agents/, references/, hooks/, scripts/)
 #    - $HERMES_HOME/skills/<n>/  (top-level skills, auto-discovered by Hermes)
-#    - $HERMES_HOME/agent-hooks/  (3 shell hooks + 4 gate scripts + gate-modes.yaml)
+#    - $HERMES_HOME/hooks/sage/  (4 shell hooks (on_session_start + post_tool_call + pre_llm_call) + 4 quality gate scripts + gate-modes.yaml)
 #    - $HERMES_HOME/config-snippet-hermes.yaml (merge into your active profile's config.yaml)
 bash sage/runtime/platforms/hermes/setup/generate-hermes.sh .
 
@@ -120,10 +120,10 @@ $HERMES_HOME/skills/
 
 These are auto-loaded by Hermes at session start, independent of any plugin.
 
-`$HERMES_HOME/agent-hooks/` — shell-hook scripts:
+`$HERMES_HOME/hooks/sage/` — shell-hook scripts (canonical Gateway Hooks shape):
 
 ```
-agent-hooks/
+hooks/sage/
 ├── sage-session-init.sh         # Fires on_session_start — emits Sage context block
 ├── sage-mark-edit.sh            # Fires post_tool_call (write_file|patch) — marks touched files
 ├── sage-inject.sh               # Fires pre_llm_call — injects sage workflow hints as {context: ...}
