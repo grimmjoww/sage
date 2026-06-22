@@ -5,7 +5,7 @@
 #   - AGENTS.md (constitution)
 #   - $HERMES_HOME/plugins/sage/ (one plugin, with skills/ + agents/ + references/ + hooks/ + scripts/)
 #   - $HERMES_HOME/skills/ (top-level auto-discovered skills, separate from plugin)
-#   - agent-hooks/ (3 shell hooks for on_session_start + post_tool_call + pre_llm_call)
+#   - gateway-hooks/ (3 shell hooks for on_session_start + post_tool_call + pre_llm_call)
 #   - shell-hooks-allowlist.json (consent record auto-updated)
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
@@ -21,7 +21,7 @@ if [ "${OS:-}" = "Windows_NT" ] || uname -s 2>/dev/null | grep -qi mingw; then
 fi
 
 # Discover installed profiles — for multi-profile setups (HERMES_HOME set),
-# hooks go into EACH profile's config + agent-hooks. For single-profile
+# hooks go into EACH profile's config + hooks/ For single-profile
 # setups (HERMES_HOME unset → $HOME/.hermes), there's only one profile dir.
 #
 # Use --profile=<name> to target a single profile (RECOMMENDED).
@@ -54,8 +54,9 @@ if [ -d "$HERMES_PROFILES_ROOT" ]; then
   fi
 fi
 
-# If no profiles dir exists, install hooks into HERMES_HOME root + write a
-# top-level config.yaml hooks: block (single-profile default).
+# If no profiles dir exists, install hooks into HERMES_HOME/hooks/sage/
+# (canonical Gateway Hooks subdir shape — each hook is a directory under
+# ~/.hermes/hooks/ per the docs, named after the plugin that owns it).
 if [ "${#HERMES_PROFILES[@]}" -eq 0 ]; then
   if [ -n "$TARGET_PROFILE" ]; then
     echo "❌ --profile=$TARGET_PROFILE specified but no profiles/ dir found at $HERMES_PROFILES_ROOT/"
@@ -63,6 +64,8 @@ if [ "${#HERMES_PROFILES[@]}" -eq 0 ]; then
     exit 1
   fi
   HERMES_PROFILES=("$HERMES_HOME")
+  # Override the per-profile hooks dir to use the canonical subdir shape
+  SINGLE_PROFILE_MODE=true
 fi
 
 HERMES_PLUGINS_DIR="$HERMES_HOME/plugins"
@@ -77,7 +80,7 @@ echo "════════════════════════�
 echo "Hermes home:  $HERMES_HOME"
 echo "Plugins dir:  $HERMES_PLUGINS_DIR/sage/"
 echo "Skills dir:   $HERMES_SKILLS_DIR"
-echo "Agent hooks:  per-profile agent-hooks/ (discovered from $HERMES_HOME/profiles/*/)"
+echo "Agent hooks:  per-profile hooks/ (discovered from $HERMES_HOME/profiles/*/)"
 echo ""
 
 # ── Validate ──
@@ -273,17 +276,26 @@ CONVEOF
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# Gate scripts + session-init hook — DEPLOYED TO EACH PROFILE'S agent-hooks/
+# Gate scripts + session-init hook — DEPLOYED TO EACH PROFILE'S hooks/
 # ═══════════════════════════════════════════════════════════════
 echo ""
-echo "🔒 Deploying gate scripts + session-init → per-profile agent-hooks/"
+echo "🔒 Deploying gate scripts + session-init → per-profile hooks/"
 
 GATE_SCRIPTS="$CORE/gates/scripts"
 GATE_CONFIG="$CORE/gates/_config/gate-modes.yaml"
 HOOK_SRC="$CORE/../runtime/platforms/hermes/hooks/sage-session-init.sh"
 
 for prof_dir in "${HERMES_PROFILES[@]}"; do
-  prof_hooks_dir="$prof_dir/agent-hooks"
+  # Per-profile hooks dir shape:
+  #   - Multi-profile: $prof_dir/hooks/sage/  (canonical Gateway Hooks subdir)
+  #   - Single-profile (HERMES_HOME unset, no profiles/): $prof_dir/hooks/sage/ too
+  # The directory name `sage` matches the plugin namespace; the scripts within
+  # are flat files (gate + session-init).
+  if [ "${SINGLE_PROFILE_MODE:-}" = "true" ]; then
+    prof_hooks_dir="$prof_dir/hooks/sage"
+  else
+    prof_hooks_dir="$prof_dir/hooks/sage"
+  fi
   mkdir -p "$prof_hooks_dir"
 
   if [ -d "$GATE_SCRIPTS" ]; then
@@ -295,7 +307,7 @@ for prof_dir in "${HERMES_PROFILES[@]}"; do
   fi
   [ -f "$GATE_CONFIG" ] && cp "$GATE_CONFIG" "$prof_hooks_dir/"
   [ -f "$HOOK_SRC" ] && cp "$HOOK_SRC" "$prof_hooks_dir/sage-session-init.sh" && chmod +x "$prof_hooks_dir/sage-session-init.sh"
-  echo "  ✓ $(basename "$prof_dir")/agent-hooks/ ($(ls "$prof_hooks_dir" | wc -l) files)"
+  echo "  ✓ $(basename "$prof_dir")/hooks/ ($(ls "$prof_hooks_dir" | wc -l) files)"
 done
 
 # ═══════════════════════════════════════════════════════════════
@@ -308,7 +320,7 @@ echo "📋 Updating hooks: block in each profile's config.yaml"
 for prof_dir in "${HERMES_PROFILES[@]}"; do
   prof_cfg="$prof_dir/config.yaml"
   prof_name=$(basename "$prof_dir")
-  prof_hooks_dir="$prof_dir/agent-hooks"
+  prof_hooks_dir="$prof_dir/hooks/sage"
 
   # If config.yaml doesn't exist yet (fresh install), create a minimal one
   # with the hooks: block already populated. This avoids the "hooks
@@ -367,9 +379,9 @@ p = Path('$ALLOWLIST')
 data = json.loads(p.read_text()) if p.exists() else {'approvals': []}
 data.setdefault('approvals', [])
 add = [
-  {'event': 'on_session_start', 'command': 'bash \"G:/hermes/profiles/<profile>/agent-hooks/sage-session-init.sh\"'},
-  {'event': 'post_tool_call', 'command': 'bash \"G:/hermes/profiles/<profile>/agent-hooks/sage-mark-edit.sh\"'},
-  {'event': 'pre_llm_call', 'command': 'bash \"G:/hermes/profiles/<profile>/agent-hooks/sage-inject.sh\"'},
+  {'event': 'on_session_start', 'command': 'bash \"G:/hermes/profiles/<profile>/hooks/sage-session-init.sh\"'},
+  {'event': 'post_tool_call', 'command': 'bash \"G:/hermes/profiles/<profile>/hooks/sage-mark-edit.sh\"'},
+  {'event': 'pre_llm_call', 'command': 'bash \"G:/hermes/profiles/<profile>/hooks/sage-inject.sh\"'},
 ]
 existing = {(e.get('event'), e.get('command')) for e in data['approvals']}
 for entry in add:
@@ -400,7 +412,7 @@ if [ "$PROFILE_PLUGIN_SYMLINKS" -gt 0 ]; then
   echo "  ✓ Symlinked into $PROFILE_PLUGIN_SYMLINKS profile plugin dirs"
 fi
 echo "  ✓ Top-level skills: $HERMES_SKILLS_DIR/<n>/ (auto-discovered)"
-echo "  ✓ Gate scripts + session-init at each profile's agent-hooks/"
+echo "  ✓ Gate scripts + session-init at each profile's gateway-hooks/"
 echo "  ✓ Hooks block written to each profile's config.yaml"
 echo ""
 echo "Next steps:"
