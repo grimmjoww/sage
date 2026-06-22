@@ -20,10 +20,48 @@ if [ "${OS:-}" = "Windows_NT" ] || uname -s 2>/dev/null | grep -qi mingw; then
   HERMES_HOME="${HERMES_HOME:-$LOCALAPPDATA/hermes}"
 fi
 
+# Discover installed profiles — for multi-profile setups (HERMES_HOME set),
+# hooks go into EACH profile's config + agent-hooks. For single-profile
+# setups (HERMES_HOME unset → $HOME/.hermes), there's only one profile dir.
+#
+# Use --profile=<name> to target a single profile (RECOMMENDED).
+# Use --all-profiles to target every profile (default, but explicit).
+HERMES_PROFILES_ROOT="$HERMES_HOME/profiles"
+TARGET_PROFILE=""
+TARGET_ALL_PROFILES=true
+for arg in "$@"; do
+  case "$arg" in
+    --profile=*) TARGET_PROFILE="${arg#--profile=}"; TARGET_ALL_PROFILES=false ;;
+    --all-profiles) TARGET_ALL_PROFILES=true ;;
+  esac
+done
+HERMES_PROFILES=()
+if [ -d "$HERMES_PROFILES_ROOT" ]; then
+  if [ -n "$TARGET_PROFILE" ]; then
+    # Targeted install: only the named profile
+    if [ -d "$HERMES_PROFILES_ROOT/$TARGET_PROFILE" ]; then
+      HERMES_PROFILES=("$HERMES_PROFILES_ROOT/$TARGET_PROFILE")
+    else
+      echo "❌ Profile '$TARGET_PROFILE' not found at $HERMES_PROFILES_ROOT/"
+      echo "   Available profiles: $(ls "$HERMES_PROFILES_ROOT" | tr '\n' ' ')"
+      exit 1
+    fi
+  else
+    for prof in "$HERMES_PROFILES_ROOT"/*/; do
+      [ -d "$prof" ] || continue
+      HERMES_PROFILES+=("$prof")
+    done
+  fi
+fi
+
+# If no profiles dir exists, install hooks into HERMES_HOME root + write a
+# top-level config.yaml hooks: block (single-profile default).
+if [ "${#HERMES_PROFILES[@]}" -eq 0 ]; then
+  HERMES_PROFILES=("$HERMES_HOME")
+fi
+
 HERMES_PLUGINS_DIR="$HERMES_HOME/plugins"
 HERMES_SKILLS_DIR="$HERMES_HOME/skills"
-HERMES_AGENT_HOOKS_DIR="$HERMES_HOME/agent-hooks"
-HERMES_CONFIG_SNIPPET="$HERMES_HOME/config-snippet-hermes.yaml"
 
 CORE="$SAGE_DIR/core"
 PLUGIN_TEMPLATE="$(dirname "$0")/sage-plugin-contents"
@@ -34,7 +72,7 @@ echo "════════════════════════�
 echo "Hermes home:  $HERMES_HOME"
 echo "Plugins dir:  $HERMES_PLUGINS_DIR/sage/"
 echo "Skills dir:   $HERMES_SKILLS_DIR"
-echo "Agent hooks:  $HERMES_AGENT_HOOKS_DIR"
+echo "Agent hooks:  per-profile agent-hooks/ (discovered from $HERMES_HOME/profiles/*/)"
 echo ""
 
 # ── Validate ──
@@ -111,18 +149,26 @@ with open('$SAGE_ROOT/AGENTS.md', 'w') as f:
 
 echo "  ✓ AGENTS.md"
 
+SAGE_PLUGIN="$HERMES_PLUGINS_DIR/sage"
+
 # ═══════════════════════════════════════════════════════════════
-# Plugin — ONE plugin with everything bundled
+# Plugin — install at top-level, symlink into each profile
 # ═══════════════════════════════════════════════════════════════
 echo ""
-echo "📦 Installing sage plugin → $HERMES_PLUGINS_DIR/sage/"
+echo "📦 Installing sage plugin → $SAGE_PLUGIN"
 
-SAGE_PLUGIN="$HERMES_PLUGINS_DIR/sage"
 mkdir -p "$SAGE_PLUGIN"
 
 # Clean any previous broken sage-* plugins (from the old shape)
 for old_plugin in "$HERMES_PLUGINS_DIR"/sage-*/; do
   [ -d "$old_plugin" ] && rm -rf "$old_plugin"
+done
+# Also clean from each profile's plugin dir
+for prof_dir in "${HERMES_PROFILES[@]}"; do
+  [ "$prof_dir" = "$HERMES_HOME" ] && continue  # skip HERMES_HOME root in single-profile mode
+  for old_plugin in "$prof_dir"/plugins/sage-*/; do
+    [ -d "$old_plugin" ] && rm -rf "$old_plugin"
+  done
 done
 
 # Copy the entire plugin template dir
@@ -140,6 +186,34 @@ done
 # Make scripts + init.py executable
 chmod +x "$SAGE_PLUGIN/__init__.py" 2>/dev/null
 [ -d "$SAGE_PLUGIN/scripts" ] && chmod +x "$SAGE_PLUGIN/scripts/sage" 2>/dev/null
+
+# Symlink the plugin into each profile's plugin dir so profile-scoped
+# config can discover it via get_hermes_home() / 'plugins'.
+# (Per hermes-cli/plugins.py:1240, profile plugins come from the profile's
+# own plugins/ dir. Symlinking into each keeps the source single.)
+#
+# On Windows, use 'cmd /c mklink /J' to create a Junction (no admin needed,
+# works under Git-bash and WSL). On Linux/macOS, plain `ln -s` works.
+for prof_dir in "${HERMES_PROFILES[@]}"; do
+  [ "$prof_dir" = "$HERMES_HOME" ] && continue  # skip HERMES_HOME root
+  prof_plugins="$prof_dir/plugins"
+  mkdir -p "$prof_plugins"
+  if [ "$prof_plugins" != "$HERMES_PLUGINS_DIR" ]; then
+    if [ -d "$prof_plugins/sage" ] || [ -L "$prof_plugins/sage" ]; then
+      rm -rf "$prof_plugins/sage"
+    fi
+    SAGE_PLUGIN_WIN=$(echo "$SAGE_PLUGIN" | sed 's|^/c/|C:/|; s|^/g/|G:/|')
+    PROFILE_PLUGINS_WIN=$(echo "$prof_plugins" | sed 's|^/c/|C:/|; s|^/g/|G:/|')
+    if [ "${OS:-}" = "Windows_NT" ] || uname -s 2>/dev/null | grep -qi mingw; then
+      # Use Windows Junction (no admin needed for user-writable paths)
+      cmd.exe //c "mklink /J \"${PROFILE_PLUGINS_WIN}\\sage\" \"${SAGE_PLUGIN_WIN}\"" >/dev/null 2>&1
+      echo "  ✓ $(basename "$prof_dir")/plugins/sage → ${SAGE_PLUGIN_WIN} (junction)"
+    else
+      ln -s "$SAGE_PLUGIN" "$prof_plugins/sage"
+      echo "  ✓ $(basename "$prof_dir")/plugins/sage → ${SAGE_PLUGIN_WIN} (symlink)"
+    fi
+  fi
+done
 
 SKILL_COUNT=$(find "$SAGE_PLUGIN/skills" -name "SKILL.md" 2>/dev/null | wc -l)
 AGENT_COUNT=$(find "$SAGE_PLUGIN/agents" -name "*.md" 2>/dev/null | wc -l)
@@ -194,63 +268,85 @@ CONVEOF
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# Gate scripts + session-init hook at agent-hooks/
+# Gate scripts + session-init hook — DEPLOYED TO EACH PROFILE'S agent-hooks/
 # ═══════════════════════════════════════════════════════════════
 echo ""
-echo "🔒 Deploying gate scripts → $HERMES_AGENT_HOOKS_DIR"
+echo "🔒 Deploying gate scripts + session-init → per-profile agent-hooks/"
 
-mkdir -p "$HERMES_AGENT_HOOKS_DIR"
 GATE_SCRIPTS="$CORE/gates/scripts"
-
-if [ -d "$GATE_SCRIPTS" ]; then
-  for script in "$GATE_SCRIPTS"/*.sh; do
-    [ -f "$script" ] || continue
-    cp "$script" "$HERMES_AGENT_HOOKS_DIR/"
-    chmod +x "$HERMES_AGENT_HOOKS_DIR/$(basename "$script")"
-    echo "  ✓ $(basename "$script")"
-  done
-fi
-
 GATE_CONFIG="$CORE/gates/_config/gate-modes.yaml"
-if [ -f "$GATE_CONFIG" ]; then
-  cp "$GATE_CONFIG" "$HERMES_AGENT_HOOKS_DIR/"
-  echo "  ✓ gate-modes.yaml"
-fi
-
-# Session-init hook — the hermes-adapted version
 HOOK_SRC="$CORE/../runtime/platforms/hermes/hooks/sage-session-init.sh"
-if [ -f "$HOOK_SRC" ]; then
-  cp "$HOOK_SRC" "$HERMES_AGENT_HOOKS_DIR/sage-session-init.sh"
-  chmod +x "$HERMES_AGENT_HOOKS_DIR/sage-session-init.sh"
-  echo "  ✓ sage-session-init.sh (cwd-adapted)"
-fi
+
+for prof_dir in "${HERMES_PROFILES[@]}"; do
+  prof_hooks_dir="$prof_dir/agent-hooks"
+  mkdir -p "$prof_hooks_dir"
+
+  if [ -d "$GATE_SCRIPTS" ]; then
+    for script in "$GATE_SCRIPTS"/*.sh; do
+      [ -f "$script" ] || continue
+      cp "$script" "$prof_hooks_dir/"
+      chmod +x "$prof_hooks_dir/$(basename "$script")"
+    done
+  fi
+  [ -f "$GATE_CONFIG" ] && cp "$GATE_CONFIG" "$prof_hooks_dir/"
+  [ -f "$HOOK_SRC" ] && cp "$HOOK_SRC" "$prof_hooks_dir/sage-session-init.sh" && chmod +x "$prof_hooks_dir/sage-session-init.sh"
+  echo "  ✓ $(basename "$prof_dir")/agent-hooks/ ($(ls "$prof_hooks_dir" | wc -l) files)"
+done
 
 # ═══════════════════════════════════════════════════════════════
-# config-snippet + allowlist update
+# config.yaml hooks: block — DIRECTLY UPDATE EACH PROFILE'S config.yaml
+# (no config-snippet file with REPLACE_ME placeholder; that was the broken pattern)
 # ═══════════════════════════════════════════════════════════════
 echo ""
-echo "📋 Writing config snippet → $HERMES_CONFIG_SNIPPET"
+echo "📋 Updating hooks: block in each profile's config.yaml"
 
-cat > "$HERMES_CONFIG_SNIPPET" << 'HOOKEOF'
-# ── Sage hooks — merge into your active profile's config.yaml ──
-# (usually ~/.hermes/config.yaml OR $HERMES_HOME/profiles/<profile>/config.yaml)
-hooks:
-  on_session_start:
-  - command: bash "G:/hermes/profiles/REPLACE_ME/agent-hooks/sage-session-init.sh"
-    timeout: 10
-  post_tool_call:
-  - command: bash "G:/hermes/profiles/REPLACE_ME/agent-hooks/sage-mark-edit.sh"
-    matcher: write_file|patch
-    timeout: 10
-  pre_llm_call:
-  - command: bash "G:/hermes/profiles/REPLACE_ME/agent-hooks/sage-inject.sh"
-    timeout: 10
-HOOKEOF
+for prof_dir in "${HERMES_PROFILES[@]}"; do
+  prof_cfg="$prof_dir/config.yaml"
+  prof_name=$(basename "$prof_dir")
+  prof_hooks_dir="$prof_dir/agent-hooks"
 
-echo "  ✓ $HERMES_CONFIG_SNIPPET"
-echo "  → Replace 'REPLACE_ME' with your profile name, then merge."
+  # If config.yaml doesn't exist yet (fresh install), create a minimal one
+  # with the hooks: block already populated. This avoids the "hooks
+  # installed but config silent" gap for new users.
+  if [ ! -f "$prof_cfg" ]; then
+    if [ ! -d "$prof_dir" ]; then
+      mkdir -p "$prof_dir"
+    fi
+    cat > "$prof_cfg" << 'NEWCFG'
+# Minimal hermes config — populated by sage init --platform hermes
+hooks: {}
+hooks_auto_accept: true
+platforms: []
+NEWCFG
+    echo "  ✓ $prof_name/config.yaml (created with hooks: skeleton)"
+  fi
 
+  # Use python3 to safely merge the hooks: block into config.yaml
+  python3 -c "
+import yaml, sys
+from pathlib import Path
+p = Path(r'''$prof_cfg''')
+hooks_dir = r'''$prof_hooks_dir'''
+data = yaml.safe_load(p.read_text()) or {}
+if not isinstance(data, dict):
+    data = {}
+hooks_block = {
+    'on_session_start': [{'command': f'bash {hooks_dir}/sage-session-init.sh', 'timeout': 10}],
+    'post_tool_call':   [{'command': f'bash {hooks_dir}/sage-mark-edit.sh', 'matcher': 'write_file|patch', 'timeout': 10}],
+    'pre_llm_call':      [{'command': f'bash {hooks_dir}/sage-inject.sh', 'timeout': 10}],
+}
+data['hooks'] = hooks_block
+# Ensure hooks_auto_accept: true so first run doesn't prompt
+data.setdefault('hooks_auto_accept', True)
+p.write_text(yaml.safe_dump(data, sort_keys=False, default_flow_style=False))
+print(f'  ✓ {r'''$prof_name'''}/config.yaml: hooks: block written')
+" 2>/dev/null || echo "  ⚠ python3+pyyaml not available; manual merge required for $prof_name"
+done
+
+# ═══════════════════════════════════════════════════════════════
 # Allowlist — auto-update at $HOME/shell-hooks-allowlist.json (not ~/.hermes/!)
+# Each profile's hooks need their own approval entries in the allowlist
+# ═══════════════════════════════════════════════════════════════
 ALLOWLIST=""
 if [ "${OS:-}" = "Windows_NT" ] || uname -s 2>/dev/null | grep -qi mingw; then
   ALLOWLIST="$HOME/shell-hooks-allowlist.json"
@@ -266,9 +362,9 @@ p = Path('$ALLOWLIST')
 data = json.loads(p.read_text()) if p.exists() else {'approvals': []}
 data.setdefault('approvals', [])
 add = [
-  {'event': 'on_session_start', 'command': 'bash \"G:/hermes/profiles/REPLACE_ME/agent-hooks/sage-session-init.sh\"'},
-  {'event': 'post_tool_call', 'command': 'bash \"G:/hermes/profiles/REPLACE_ME/agent-hooks/sage-mark-edit.sh\"'},
-  {'event': 'pre_llm_call', 'command': 'bash \"G:/hermes/profiles/REPLACE_ME/agent-hooks/sage-inject.sh\"'},
+  {'event': 'on_session_start', 'command': 'bash \"G:/hermes/profiles/<profile>/agent-hooks/sage-session-init.sh\"'},
+  {'event': 'post_tool_call', 'command': 'bash \"G:/hermes/profiles/<profile>/agent-hooks/sage-mark-edit.sh\"'},
+  {'event': 'pre_llm_call', 'command': 'bash \"G:/hermes/profiles/<profile>/agent-hooks/sage-inject.sh\"'},
 ]
 existing = {(e.get('event'), e.get('command')) for e in data['approvals']}
 for entry in add:
@@ -294,14 +390,16 @@ echo "      skills/ ($SKILL_COUNT SKILL.md files; 15 slash-commanded)"
 echo "      agents/ ($AGENT_COUNT personas)"
 echo "      references/ ($REF_COUNT templates)"
 echo "      hooks/hooks.json + scripts/sage"
+PROFILE_PLUGIN_SYMLINKS=$(for prof_dir in "${HERMES_PROFILES[@]}"; do [ "$prof_dir" != "$HERMES_HOME" ] && echo "Y"; done | wc -l)
+if [ "$PROFILE_PLUGIN_SYMLINKS" -gt 0 ]; then
+  echo "  ✓ Symlinked into $PROFILE_PLUGIN_SYMLINKS profile plugin dirs"
+fi
 echo "  ✓ Top-level skills: $HERMES_SKILLS_DIR/<n>/ (auto-discovered)"
-echo "  ✓ Gate scripts + session-init at $HERMES_AGENT_HOOKS_DIR/"
-echo "  ✓ $HERMES_CONFIG_SNIPPET (merge into your profile's config.yaml)"
+echo "  ✓ Gate scripts + session-init at each profile's agent-hooks/"
+echo "  ✓ Hooks block written to each profile's config.yaml"
 echo ""
 echo "Next steps:"
-echo "  1. Merge $HERMES_CONFIG_SNIPPET into your active profile's config.yaml"
-echo "     (replace 'REPLACE_ME' with your profile name first)"
-echo "  2. Run 'hermes plugins enable sage' to load the plugin"
-echo "  3. Run 'hermes hooks doctor' to verify the 3 hooks"
-echo "  4. Restart the gateway; on next session, type /sage or /build"
+echo "  1. Run 'hermes plugins enable sage' to load the plugin"
+echo "  2. Run 'hermes hooks doctor' to verify the 3 hooks (per-profile)"
+echo "  3. Restart the gateway; on next session, type /sage or /build"
 echo ""

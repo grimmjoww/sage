@@ -590,12 +590,26 @@ run_generators() {
     local script="$sage_path/runtime/platforms/$p/setup/generate-$p.sh"
     if [ -f "$script" ]; then
       echo ""
-      bash "$script" "$target"
+      # Pass through platform-specific flags. Hermes accepts --profile=<name>
+      # to target a single profile's config instead of blasting all of them.
+      case "$p" in
+        hermes)
+          # Forward profile flags if user passed them
+          extra_flags=""
+          for arg in "${EXTRA_FLAGS[@]:-}"; do
+            case "$arg" in
+              --profile=*|--all-profiles) extra_flags="$extra_flags $arg" ;;
+            esac
+          done
+          bash "$script" "$target" $extra_flags
+          ;;
+        *) bash "$script" "$target" ;;
+      esac
     else
       echo -e "  ${YELLOW}⚠ Generator not found: $script${RESET}"
     fi
   done
-}
+fi
 
 print_success() {
   local target="$1"
