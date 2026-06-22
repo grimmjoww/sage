@@ -1,0 +1,20 @@
+{
+  "name": "sage",
+  "version": "1.0.9",
+  "description": "AI skills framework: UNDERSTAND → ENVISION → DELIVER → REFLECT. Process enforcement, 14 workflows, 37 skills, 5 agent personas. Single Hermes plugin with auto-discovered skills + slash commands for the 16 workflow entry points.",
+  "author": {
+    "name": "Rei Stewart (adapted from xoai/sage claude-code plugin)",
+    "url": "https://github.com/grimmjoww/sage/tree/feat/hermes-platform-adapter"
+  },
+  "license": "MIT",
+  "platforms": ["hermes"],
+  "platform_compat_notes": "Hermes reads plugin.yaml (this file's sibling) directly; marketplace.json is for cross-platform installation via the claude-code marketplace. On Hermes, the plugin ships as a single directory at ~/.hermes/plugins/sage/.",
+  "skills_count": 53,
+  "slash_commands": ["sage", "build", "fix", "architect", "analyze", "learn", "map", "qa", "reflect", "research", "review", "status", "design", "design-review", "continue"],
+  "hooks": [
+    "on_session_start: bash agent-hooks/sage-session-init.sh",
+    "post_tool_call: bash agent-hooks/sage-mark-edit.sh (matcher=write_file|patch)",
+    "pre_llm_call: bash agent-hooks/sage-inject.sh"
+  ],
+  "repository": "https://github.com/grimmjoww/sage"
+}

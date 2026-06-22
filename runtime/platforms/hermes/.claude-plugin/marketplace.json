@@ -1,0 +1,25 @@
+{
+  "name": "sage",
+  "version": "1.0.9",
+  "description": "Sage — AI skills framework ported to Hermes Agent. Single plugin ships 53 SKILL.md files (15 slash-commanded + 38 auto-loaded), 5 agent personas, 10 reference templates, plugin-internal hooks, and a sage CLI wrapper.",
+  "owner": {
+    "name": "Rei Stewart",
+    "url": "https://github.com/grimmjoww"
+  },
+  "plugins": [
+    {
+      "name": "sage",
+      "description": "Single Hermes plugin that bundles the full Sage ecosystem (UNDERSTAND → ENVISION → DELIVER → REFLECT pipeline). On Hermes, ships as ~/.hermes/plugins/sage/ with skills/ + agents/ + references/ + hooks/ + scripts/ subdirs.",
+      "version": "1.0.9",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/grimmjoww/sage.git",
+        "path": "runtime/platforms/hermes"
+      },
+      "author": {
+        "name": "Rei Stewart (adapted from xoai/sage claude-code plugin)",
+        "url": "https://github.com/grimmjoww/sage/tree/feat/hermes-platform-adapter"
+      }
+    }
+  ]
+}

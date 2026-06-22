@@ -217,12 +217,13 @@ select_platform() {
   PLATFORMS=()  # additive list — multiple platforms can coexist
 
   # Auto-detect from existing files
-  local has_agent=false has_claude=false has_codex=false has_opencode=false has_gemini=false
+  local has_agent=false has_claude=false has_codex=false has_opencode=false has_gemini=false has_hermes=false
   [ -d "$target/.agent" ] && has_agent=true
   [ -d "$target/.claude" ] && has_claude=true
   [ -d "$target/.codex" ] && has_codex=true
   [ -d "$target/.opencode" ] && has_opencode=true
   [ -d "$target/.gemini" ] && has_gemini=true
+  [ -d "$target/.hermes" ] && has_hermes=true
   # GEMINI.md alone is ambiguous (Antigravity vs Gemini CLI); only count it
   # toward Antigravity if .agent/ also exists (or if .gemini/ doesn't exist).
   if [ -f "$target/GEMINI.md" ] && [ "$has_gemini" = false ]; then
@@ -262,6 +263,7 @@ select_platform() {
   [ "$has_codex" = true ] && PLATFORMS+=("codex")
   [ "$has_opencode" = true ] && PLATFORMS+=("opencode")
   [ "$has_gemini" = true ] && PLATFORMS+=("gemini-cli")
+  [ "$has_hermes" = true ] && PLATFORMS+=("hermes")
 
   # Honor --platform flag (one or more, space- or comma-separated)
   if [ -n "${PLATFORM_FLAG:-}" ]; then
@@ -271,7 +273,7 @@ select_platform() {
     # `--platform ","`) yields an empty FLAG_LIST; bash 3.2 aborts.
     for p in ${FLAG_LIST[@]+"${FLAG_LIST[@]}"}; do
       case "$p" in
-        claude-code|antigravity|codex|opencode|gemini-cli)
+        claude-code|antigravity|codex|opencode|gemini-cli|hermes)
           PLATFORMS+=("$p")
           ;;
         both)
@@ -281,7 +283,7 @@ select_platform() {
           PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli")
           ;;
         *)
-          echo -e "  ${YELLOW}Unknown platform: $p (supported: claude-code, antigravity, codex, opencode, gemini-cli)${RESET}"
+          echo -e "  ${YELLOW}Unknown platform: $p (supported: claude-code, antigravity, codex, opencode, gemini-cli, hermes)${RESET}"
           ;;
       esac
     done
@@ -588,7 +590,17 @@ run_generators() {
     local script="$sage_path/runtime/platforms/$p/setup/generate-$p.sh"
     if [ -f "$script" ]; then
       echo ""
-      bash "$script" "$target"
+      # Pass through platform-specific flags. Hermes accepts --profile=<name>
+      # to target a single profile's config instead of blasting all of them.
+      case "$p" in
+        hermes)
+          # Forward profile flags if user passed them
+          extra_flags=""
+          [ -n "${PROFILE_FLAG:-}" ] && extra_flags="$extra_flags --profile=$PROFILE_FLAG"
+          bash "$script" "$target" $extra_flags
+          ;;
+        *) bash "$script" "$target" ;;
+      esac
     else
       echo -e "  ${YELLOW}⚠ Generator not found: $script${RESET}"
     fi
@@ -1422,6 +1434,7 @@ sage_help() {
   echo "  --prefix                         Namespace commands as sage:build, sage:fix, etc."
   echo "  --preset <name>                  Set constitution preset (base|startup|enterprise|opensource)"
   echo "  --platform <list>                Comma-separated platforms (claude-code|antigravity|codex|opencode|gemini-cli|all)"
+  echo "  --profile <name>                 Target a single profile (hermes only); default = blast all profiles"
   echo ""
   echo "Examples:"
   echo "  sage new my-app                  # Create project with Sage"
@@ -1792,6 +1805,7 @@ WORKTREE_ARGS=("$@")
 PRESET_FLAG=""
 PREFIX_FLAG=""
 PLATFORM_FLAG=""
+PROFILE_FLAG=""
 NO_MEMORY_FLAG=""
 REMAINING_ARGS=()
 NEXT_IS=""
@@ -1800,6 +1814,7 @@ for arg in "$@"; do
     case "$NEXT_IS" in
       preset)   PRESET_FLAG="$arg" ;;
       platform) PLATFORM_FLAG="$arg" ;;
+      profile)  PROFILE_FLAG="$arg" ;;
     esac
     NEXT_IS=""
     continue
@@ -1809,6 +1824,8 @@ for arg in "$@"; do
     --preset)     NEXT_IS="preset" ;;
     --platform=*) PLATFORM_FLAG="${arg#--platform=}" ;;
     --platform)   NEXT_IS="platform" ;;
+    --profile=*)  PROFILE_FLAG="${arg#--profile=}" ;;
+    --profile)    NEXT_IS="profile" ;;
     --prefix)     PREFIX_FLAG="true" ;;
     --no-memory)  NO_MEMORY_FLAG="true" ;;
     *)            REMAINING_ARGS+=("$arg") ;;
