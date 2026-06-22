@@ -1,0 +1,3 @@
+name: sage-fix
+version: 1.0.0
+description: Debug and patch (diagnose → test → fix → verify)
