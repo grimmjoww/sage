@@ -596,11 +596,7 @@ run_generators() {
         hermes)
           # Forward profile flags if user passed them
           extra_flags=""
-          for arg in "${EXTRA_FLAGS[@]:-}"; do
-            case "$arg" in
-              --profile=*|--all-profiles) extra_flags="$extra_flags $arg" ;;
-            esac
-          done
+          [ -n "${PROFILE_FLAG:-}" ] && extra_flags="$extra_flags --profile=$PROFILE_FLAG"
           bash "$script" "$target" $extra_flags
           ;;
         *) bash "$script" "$target" ;;
@@ -609,7 +605,7 @@ run_generators() {
       echo -e "  ${YELLOW}⚠ Generator not found: $script${RESET}"
     fi
   done
-fi
+}
 
 print_success() {
   local target="$1"
@@ -1438,6 +1434,7 @@ sage_help() {
   echo "  --prefix                         Namespace commands as sage:build, sage:fix, etc."
   echo "  --preset <name>                  Set constitution preset (base|startup|enterprise|opensource)"
   echo "  --platform <list>                Comma-separated platforms (claude-code|antigravity|codex|opencode|gemini-cli|all)"
+  echo "  --profile <name>                 Target a single profile (hermes only); default = blast all profiles"
   echo ""
   echo "Examples:"
   echo "  sage new my-app                  # Create project with Sage"
@@ -1808,6 +1805,7 @@ WORKTREE_ARGS=("$@")
 PRESET_FLAG=""
 PREFIX_FLAG=""
 PLATFORM_FLAG=""
+PROFILE_FLAG=""
 NO_MEMORY_FLAG=""
 REMAINING_ARGS=()
 NEXT_IS=""
@@ -1816,6 +1814,7 @@ for arg in "$@"; do
     case "$NEXT_IS" in
       preset)   PRESET_FLAG="$arg" ;;
       platform) PLATFORM_FLAG="$arg" ;;
+      profile)  PROFILE_FLAG="$arg" ;;
     esac
     NEXT_IS=""
     continue
@@ -1825,6 +1824,8 @@ for arg in "$@"; do
     --preset)     NEXT_IS="preset" ;;
     --platform=*) PLATFORM_FLAG="${arg#--platform=}" ;;
     --platform)   NEXT_IS="platform" ;;
+    --profile=*)  PROFILE_FLAG="${arg#--profile=}" ;;
+    --profile)    NEXT_IS="profile" ;;
     --prefix)     PREFIX_FLAG="true" ;;
     --no-memory)  NO_MEMORY_FLAG="true" ;;
     *)            REMAINING_ARGS+=("$arg") ;;

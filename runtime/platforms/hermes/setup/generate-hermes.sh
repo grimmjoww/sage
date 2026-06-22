@@ -57,6 +57,11 @@ fi
 # If no profiles dir exists, install hooks into HERMES_HOME root + write a
 # top-level config.yaml hooks: block (single-profile default).
 if [ "${#HERMES_PROFILES[@]}" -eq 0 ]; then
+  if [ -n "$TARGET_PROFILE" ]; then
+    echo "❌ --profile=$TARGET_PROFILE specified but no profiles/ dir found at $HERMES_PROFILES_ROOT/"
+    echo "   Run 'sage init' WITHOUT --profile= for a single-profile (top-level) install."
+    exit 1
+  fi
   HERMES_PROFILES=("$HERMES_HOME")
 fi
 
