@@ -56,19 +56,22 @@ class BuildPluginTest(unittest.TestCase):
         if (p / "SKILL.md").is_file())
 
     def test_build_omits_excluded_skills(self):
-        """Excluded skills/ dirs must not ship — EXCEPT names the hermes
-        mirror set shares with core/system-skills/ or the plugin
-        overlay: those paths legitimately exist in the output because
-        the SAME NAME ships from its canonical source (the exclusion
-        governs the skills/ source, not the name). The companion test
-        pins that the shipped bytes ARE the canonical source's, so a
-        stale mirror can never ride the collision."""
         out = self._build()
-        for name in (build_plugin.SKILLS_NOT_IN_PLUGIN
-                     - build_plugin.SYSTEM_SKILL_NAMES
-                     - self.OVERLAY_SKILL_NAMES):
-            self.assertFalse((out / "skills" / name).exists(),
-                             f"{name} is excluded but shipped anyway")
+        for name in build_plugin.SKILLS_NOT_IN_PLUGIN:
+            built = out / "skills" / name / "SKILL.md"
+            sources = (
+                build_plugin.OVERLAY / "skills" / name / "SKILL.md",
+                build_plugin.SYSTEM_SKILLS / name / "SKILL.md",
+            )
+            canonical = next((p for p in sources if p.is_file()), None)
+            if canonical is not None:
+                self.assertTrue(built.is_file(),
+                                f"canonical replacement for {name} should ship")
+                self.assertEqual(built.read_bytes(), canonical.read_bytes(),
+                                 f"{name} must come from its canonical replacement")
+            else:
+                self.assertFalse(built.exists(),
+                                 f"{name} is excluded but shipped anyway")
 
     def test_collision_names_ship_the_canonical_source_not_the_mirror(self):
         """The Gate-4 duplication lesson as a tripwire: for names that
@@ -78,7 +81,8 @@ class BuildPluginTest(unittest.TestCase):
         mirror, this fails."""
         out = self._build()
         for name in (build_plugin.SKILLS_NOT_IN_PLUGIN
-                     & build_plugin.SYSTEM_SKILL_NAMES):
+                     & build_plugin.SYSTEM_SKILL_NAMES
+                     - self.OVERLAY_SKILL_NAMES):
             shipped = (out / "skills" / name / "SKILL.md").read_bytes()
             system = (REPO_ROOT / "core" / "system-skills" / name
                       / "SKILL.md").read_bytes()
