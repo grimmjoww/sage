@@ -10,6 +10,16 @@ before a spec or a test exists; independent reviews run in fresh contexts via
 delegate_task; degradation is logged by code. See
 `docs/attestations/hermes-tier-a-2026-08-05.md`.
 
+> [!WARNING]
+> **Install the plugin in the profile; initialize Sage in the actual project.**
+> Do not run `sage init` from `~/.hermes/profiles/<your-profile>/` (or another
+> parent directory containing unrelated agent files/projects) unless you
+> intentionally want that whole tree treated as one Sage project. The Hermes
+> adapter finds the project root from the nearest `.sage/` ancestor, so a
+> profile-level `.sage/` can put descendant workspace/profile writes under the
+> same Sage enforcement boundary. `cd` into the real project/repository first,
+> then run `sage init --platform hermes` there.
+
 ## What Sage enforces on Hermes
 
 | Capability | Status | Mechanism |
