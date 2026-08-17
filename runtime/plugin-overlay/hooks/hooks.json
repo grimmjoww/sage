@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/sage-session-init.sh",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/sage-session-init.sh\"",
             "timeout": 10
           }
         ]
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/sage-spec-gate.sh",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/sage-spec-gate.sh\"",
             "timeout": 10
           }
         ]
@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/sage-tdd-gate.sh",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/sage-tdd-gate.sh\"",
             "timeout": 10
           }
         ]
@@ -37,7 +37,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/sage-bookkeeping-gate.sh",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/sage-bookkeeping-gate.sh\"",
             "timeout": 10
           }
         ]
@@ -47,7 +47,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/sage-secrets-gate.sh",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/sage-secrets-gate.sh\"",
             "timeout": 10
           }
         ]
@@ -57,7 +57,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/sage-verify-gate.sh",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/sage-verify-gate.sh\"",
             "timeout": 10
           }
         ]
@@ -67,7 +67,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/sage-config-gate.sh",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/sage-config-gate.sh\"",
             "timeout": 10
           }
         ]
@@ -79,17 +79,17 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/sage-verify.sh ${CLAUDE_PROJECT_DIR}",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/sage-verify.sh\" ${CLAUDE_PROJECT_DIR}",
             "timeout": 30
           },
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/sage-degradation-log.sh",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/sage-degradation-log.sh\"",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/sage-manifest-sync.sh",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/sage-manifest-sync.sh\"",
             "timeout": 10
           }
         ]
@@ -99,7 +99,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/sage-verify-tracker.sh",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/sage-verify-tracker.sh\"",
             "timeout": 10
           }
         ]
