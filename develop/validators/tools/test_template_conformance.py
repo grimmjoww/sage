@@ -17,6 +17,7 @@ its handshake.
 Python 3.8+, stdlib only.
 """
 import json
+import os
 import pathlib
 import re
 import shutil
@@ -131,8 +132,13 @@ class LedgerRoundTrip(unittest.TestCase):
             "cwd": str(self.root)})
         return subprocess.run(
             ["bash", str(SPEC_GATE)], input=payload, capture_output=True,
-            text=True, env={"PATH": "/usr/bin:/bin",
-                            "CLAUDE_PROJECT_DIR": str(self.root)}).returncode
+            text=True,
+            # The stripped PATH is hermeticity on POSIX; on Windows it starves
+            # the gate of python3 (AppData install), which then fails to parse
+            # the ledger and allows the edit it must block.
+            env={"PATH": "/usr/bin:/bin" if sys.platform != "win32"
+                 else os.environ["PATH"],
+                 "CLAUDE_PROJECT_DIR": str(self.root)}).returncode
 
     def mark(self, status, review):
         m = self.cyc / "manifest.md"
