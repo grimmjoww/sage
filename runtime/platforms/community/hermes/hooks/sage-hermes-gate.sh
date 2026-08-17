@@ -17,8 +17,9 @@
 # reads exit code + both streams. Fails OPEN like every sage hook:
 # any internal error allows the action.
 #
-# Usage (registered in <profile>/config.yaml hooks: block):
-#   command: "<profile>/agent-hooks/sage/sage-hermes-gate.sh sage-spec-gate.sh"
+# Usage (registered in <profile>/config.yaml hooks: block) — argv[0] must be
+# the resolved git-bash (bare `bash` hits WSL System32 -> exit 127):
+#   command: "\"<resolved-git-bash>\" \"<profile>/hooks/sage-hermes-gate.sh\" sage-spec-gate.sh"
 # ═══════════════════════════════════════════════════════════════
 set -uo pipefail
 
@@ -43,6 +44,26 @@ TMP_ERR="$(mktemp "${TMPDIR:-/tmp}/sage-hermes-gate-err-XXXXXX" 2>/dev/null)" ||
 trap 'rm -f "$TMP_OUT" "$TMP_ERR"' EXIT
 
 PAYLOAD="$(cat 2>/dev/null || true)"
+
+# The host's activation-proof command exercises this exact adapter with a
+# private synthetic marker.  It still runs the real gate for ordinary allow
+# and block.  An unresolved target cannot be delegated safely to a gate that
+# would otherwise fail open, so the proof marker turns that one case into an
+# explicit fail-closed ``unverifiable`` outcome.  Production payloads never
+# carry ``sage_activation_probe`` and remain byte-compatible.
+PROBE_MODE="$(printf '%s' "$PAYLOAD" | python3 -c "
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    d = {}
+ti = d.get('tool_input') or {}
+print(ti.get('sage_activation_probe') or '')
+" 2>/dev/null || true)"
+if [ "$PROBE_MODE" = "unverifiable" ]; then
+  printf '{"action":"block","message":"target resolution is unverifiable","outcome":"unverifiable"}\n'
+  exit 0
+fi
 
 # Windows/msys path-conversion fix (2026-08-06, proven byte-exact):
 # gate scripts write their python to an mktemp file and exec
@@ -83,7 +104,10 @@ import json, sys
 reason = sys.stdin.read().strip()[:4000]
 if not reason:
     reason = 'blocked by sage gate'
-print(json.dumps({'decision': 'block', 'reason': reason}))
+payload = {'decision': 'block', 'reason': reason}
+if '$PROBE_MODE' == 'block':
+    payload['outcome'] = 'block'
+print(json.dumps(payload))
 " < "$TMP_ERR" 2>/dev/null || printf '{"decision":"block","reason":"blocked by sage gate"}\n'
   exit 0
 fi
@@ -97,13 +121,17 @@ import json, sys
 try:
     d = json.load(sys.stdin)
 except Exception:
-    sys.exit(0)
+    d = {}
 ctx = None
 if isinstance(d, dict):
     hso = d.get('hookSpecificOutput') or {}
     ctx = hso.get('additionalContext') or d.get('context')
 if ctx:
-    print(json.dumps({'context': str(ctx)[:8000]}))
+    payload = {'context': str(ctx)[:8000]}
+elif '$PROBE_MODE' == 'allow':
+    payload = {}
+    payload['outcome'] = 'allow'
 else:
-    print('{}')
+    sys.exit(0)
+print(json.dumps(payload))
 " < "$TMP_OUT" 2>/dev/null || printf '{}\n'

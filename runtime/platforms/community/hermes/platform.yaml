@@ -22,6 +22,8 @@ capabilities:
   post-tool-events: attested      # post_tool_call fires with tool result; R29 audit + verify-tracker + manifest-sync
   subagent-dispatch: attested     # delegate_task dispatched live 2026-08-05; independent reviewer returned APPROVE (see attestation)
   session-events: attested        # gateway session:start / session:end via hooks/sage-session/; CLI via pre_llm_call
+  # No Kanban completion-policy capability is claimed: Sage does not intercept
+  # native kanban_complete. Runtime inventory reports that bridge as false.
   context-injection-midstream: false
   # Honest false, not silence: Hermes fires post_tool_call as a pure observer —
   # the emitter (model_tools._emit_post_tool_call_hook) discards callback
@@ -103,8 +105,25 @@ supported-os: [linux, macos, windows]
 command-prefix: "/sage"
 install-method: profile-plugin
 artifacts:
-  instructions: SOUL.md           # Hermes reads SOUL.md as system prompt slot #1
+  instructions: .hermes.md        # workspace-scoped instructions; never profile identity
   commands-dir: null              # commands registered via plugin API, not files
   skills-dir: null                # skills registered via plugin API, not files
-  hooks-config: null              # hooks registered via register(ctx), not config files
+  hooks-config: <profile>/config.yaml # shell hooks are profile-configured; plugin hooks remain internal
+
+# Framework-side lifecycle code. These modules execute from the complete Sage
+# checkout and build/install the profile artifact; they are intentionally not
+# copied into plugins/sage.
+lifecycle:
+  command-resolution: "SAGE_HERMES_COMMAND JSON argv, otherwise hermes from PATH"
+  host-proof-command: "hermes --profile <name> hooks activation-proof --surface <cli|gateway> --expectation-file <path>"
+  activation: setup/activation.py
+  doctor: setup/doctor.py
+  doctor-probe: setup/doctor_probe.py
+  hook-config: setup/hook_config.py
+  profile-binding: setup/profile_binding.py
+  profile-installer: setup/profile_installer.py
+  profile-migration: setup/profile_migration.py
+  receipts: setup/receipts.py
+  topology: setup/topology.json
+  workspace-layout: setup/workspace_layout.py
 ---
