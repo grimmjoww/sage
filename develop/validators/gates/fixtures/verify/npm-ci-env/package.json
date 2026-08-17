@@ -2,6 +2,6 @@
   "name": "npm-ci-env",
   "version": "1.0.0",
   "scripts": {
-    "test": "test \"$CI\" = \"true\""
+    "test": "node -e \"process.exit(process.env.CI === 'true' ? 0 : 1)\""
   }
 }
