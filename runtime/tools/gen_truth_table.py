@@ -157,7 +157,10 @@ def main():
         print("OK — the README's platform table matches the contracts.")
         return 0
 
-    README.write_text(text.replace(current, table), encoding="utf-8")
+    # newline="\n": text mode translates to os.linesep, which on Windows
+    # rewrites the whole README as CRLF for a one-block change.
+    with README.open("w", encoding="utf-8", newline="\n") as fh:
+        fh.write(text.replace(current, table))
     print("OK — README platform table regenerated from the contracts.")
     return 0
 

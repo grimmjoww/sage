@@ -452,6 +452,10 @@ def audit(tree: pathlib.Path) -> list:
             for matcher in matchers:
                 for hook in matcher.get("hooks", []):
                     for rel in HOOK_COMMAND.findall(hook.get("command", "")):
+                        # Commands quote the expansion for Windows (${ROOT} carries
+                        # backslashes); \S+ swallows the closing quote, and the
+                        # registered path then "does not ship".
+                        rel = rel.strip('"')
                         if not (tree / rel).is_file():
                             problems.append(f"hooks.json registers {rel}, which does not ship")
 

@@ -920,6 +920,7 @@ spec-gate hook) and end-to-end CI:
 | gemini-cli *(community)* | **C** | — | — | — | — | ✅ | [2026-07-12](develop/conformance/reports/gemini-cli-2026-07-12.md) |
 | hermes *(community)* | **A** | 📝 | 📝 | 📝 | 📝 | 📝 | [2026-08-05](develop/conformance/reports/hermes-2026-08-05.md) |
 | opencode *(community)* | **A** | 📝 | 📝 | 📝 | — | ✅ | [2026-07-12](develop/conformance/reports/opencode-2026-07-12.md) |
+| zcode *(community)* | **A** | 📝 | 📝 | 📝 | 📝 | 📝 | [2026-08-17](develop/conformance/reports/zcode-2026-08-17.md) |
 
 ✅ checked · 📝 attested (evidence + expiry) · — not available
 
