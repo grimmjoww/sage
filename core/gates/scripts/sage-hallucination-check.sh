@@ -81,6 +81,10 @@ import os
 import re
 import sys
 
+# Windows python translates \n to \r\n on piped stdout; the bash reader would
+# then carry a stray \r on every directive field.
+sys.stdout.reconfigure(newline="\n")
+
 target, root = sys.argv[1], sys.argv[2]
 
 SRC_EXT = {'.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py', '.dart',

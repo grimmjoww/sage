@@ -78,6 +78,10 @@ import os
 import re
 import sys
 
+# Windows python translates \n to \r\n on piped stdout; the bash reader would
+# then carry a stray \r on every directive field.
+sys.stdout.reconfigure(newline="\n")
+
 plan_path, task_num = sys.argv[1], sys.argv[2]
 out = []
 

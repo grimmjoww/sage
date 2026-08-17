@@ -81,6 +81,10 @@ import json
 import os
 import sys
 
+# Windows python translates \n to \r\n on piped stdout; the bash reader would
+# then execute 'import pytest\r' and every directive field carries a stray \r.
+sys.stdout.reconfigure(newline="\n")
+
 root = sys.argv[1]
 CHECKED = "vitest, jest, mocha, npm test, pytest, flutter, go"
 out = []
