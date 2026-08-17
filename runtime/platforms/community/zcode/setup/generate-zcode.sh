@@ -117,7 +117,7 @@ cat > "$PROJECT_SAGE/hooks/zcode-session-start.sh" <<'WRAPPER'
 #!/usr/bin/env bash
 # ZCode adapter: re-emit sage-session-init.sh plain output as
 # {"additionalContext": "..."} — the only stdout form ZCode delivers.
-out="$(bash "${CLAUDE_PROJECT_DIR}/sage/hooks/scripts/sage-session-init.sh" 2>/dev/null || true)"
+out="$(bash "${CLAUDE_PROJECT_DIR}/sage/runtime/platforms/claude-code/hooks/sage-session-init.sh" 2>/dev/null || true)"
 [ -z "$out" ] && exit 0
 python3 - "$out" <<'PY' 2>/dev/null || exit 0
 import json, sys
@@ -139,10 +139,16 @@ if os.path.exists(cfg_path):
     except Exception:
         cfg = {}
 
+# The vendored tree is pruned to core/skills/runtime/bin (ADR-6) — there is
+# no top-level hooks/. Gate scripts ship inside the claude-code platform dir;
+# the shared verifier lives in core/gates/scripts.
+GATES_DIR = "sage/runtime/platforms/claude-code/hooks"
+
 def gate(script, timeout=10):
+    sub = "sage/core/gates/scripts" if script == "sage-verify.sh" else GATES_DIR
     return {
         "type": "command",
-        "command": f'bash "${{CLAUDE_PROJECT_DIR}}/sage/hooks/scripts/{script}"',
+        "command": f'bash "${{CLAUDE_PROJECT_DIR}}/{sub}/{script}"',
         "timeout": timeout,
     }
 
