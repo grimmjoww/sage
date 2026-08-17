@@ -1,0 +1,109 @@
+---
+name: zcode
+description: >
+  ZCode — a Claude-plugin-compatible agent CLI (Windows/macOS/Linux; probed on
+  Windows + Git Bash). Sage enforces mechanically through ZCode's hook runner:
+  PreToolUse exit 2 vetoes the call with a model-visible reason, PostToolUse
+  observes results, SessionStart fires on startup/resume/clear/compact, and
+  hook stdout of {"additionalContext": ...} reaches the model mid-session.
+  Two platform quirks the port adapts for: hook commands run through bash, so
+  ${CLAUDE_PROJECT_DIR} paths MUST be double-quoted (unquoted backslash paths
+  are mangled, rc 127 — the sage plugin's own hooks.json ships unquoted and
+  fails on Windows until patched); and non-JSON hook stdout is discarded, so
+  the generated session-start hook re-emits sage-session-init output as JSON.
+contract-version: 2
+maintainer: "willi"
+
+capabilities:
+  context-injection: true         # AGENTS.md generated; ZCode loads it at session start
+  command-delivery: attested      # sage plugin skills surface as slash commands (/sage:*)
+  native-skill-discovery: attested  # description-triggered plugin skills (R112: no skills-dir)
+  pre-tool-veto: attested         # PreToolUse exit 2 -> permissionDecision deny (host source + probe)
+  post-tool-events: attested      # PostToolUse fires with tool result (log 2026-08-17)
+  subagent-dispatch: attested     # Agent/Task tool; plugin registers sage-classifier persona
+  session-events: attested        # SessionStart fired (log 2026-08-17, all four match values)
+  context-injection-midstream: attested  # additionalContext -> model-visible (host source)
+
+attestations:
+  - capability: pre-tool-veto
+    evidence: docs/attestations/zcode-tier-a-2026-08-17.md
+    verified: 2026-08-17
+    expires-release: "1.5"
+    note: >
+      Host source (zcode.cjs core.hooks) maps hook exit 2 to a block result
+      with permissionDecision "deny" and the stderr text as the model-visible
+      reason; exit 0 passes, any other exit fails the run. Reproduced locally:
+      unquoted backslash script paths rc 127 (the reason every sage plugin
+      hook failed on Windows until the quoting patch), quoted/forward-slash
+      paths rc 0. Live exit-2 veto canary installed in the workspace config;
+      re-probe on the next app restart.
+
+  - capability: post-tool-events
+    evidence: docs/attestations/zcode-tier-a-2026-08-17.md
+    verified: 2026-08-17
+    expires-release: "1.5"
+    note: >
+      ZCode log 2026-08-17 records plugin.sage PostToolUse hooks executing
+      after every Write|Edit (65 records) with matcher, source and duration —
+      they failed only on the unquoted-path bug, which the port's generator
+      fixes by double-quoting every ${CLAUDE_PROJECT_DIR} path.
+
+  - capability: subagent-dispatch
+    evidence: docs/attestations/zcode-tier-a-2026-08-17.md
+    verified: 2026-08-17
+    expires-release: "1.5"
+    note: >
+      The Agent tool dispatches fresh-context subagents, and the sage plugin's
+      agents/sage-classifier.md registers as a dispatchable persona — verified
+      in a live session (2026-08-17). Hooks-fire-inside-subagents not yet
+      probed here; re-probe before relying on ADR-10's escape-hatch argument.
+
+  - capability: session-events
+    evidence: docs/attestations/zcode-tier-a-2026-08-17.md
+    verified: 2026-08-17
+    expires-release: "1.5"
+    note: >
+      SessionStart hooks fire (log 2026-08-17: plugin.sage SessionStart
+      executed; match values startup/resume/clear/compact). Stop and
+      UserPromptSubmit events also exist but are not yet exercised by Sage
+      here.
+
+  - capability: context-injection-midstream
+    evidence: docs/attestations/zcode-tier-a-2026-08-17.md
+    verified: 2026-08-17
+    expires-release: "1.5"
+    note: >
+      Host source pushes hook output.additionalContext /
+      hookSpecificOutput.additionalContext into the conversation for
+      PostToolUse, UserPromptSubmit, SessionStart and Stop. Plain-text stdout
+      is DISCARDED (only JSON is parsed) — unlike claude-code — so the port's
+      session-start adapter re-emits sage-session-init output as JSON.
+
+  - capability: command-delivery
+    evidence: docs/attestations/zcode-tier-a-2026-08-17.md
+    verified: 2026-08-17
+    expires-release: "1.5"
+    note: >
+      The sage plugin's 27 skills are registered and slash-invokable in a live
+      session (/sage, /fix, /architect, ... — observed 2026-08-17). The
+      generated install without the plugin inlines system skills into
+      AGENTS.md instead.
+
+  - capability: native-skill-discovery
+    evidence: docs/attestations/zcode-tier-a-2026-08-17.md
+    verified: 2026-08-17
+    expires-release: "1.5"
+    note: >
+      Plugin skills are description-triggered and loaded on demand (the
+      session's available-skills list is populated this way; a skill was
+      invoked by name through the host Skill tool on 2026-08-17). R112:
+      registration is via the host plugin system, not generated files.
+
+supported-os: [windows]           # probed on Windows 11 + Git Bash; macos/linux expected but unproven
+
+command-prefix: "/sage"
+install-method: plugin-marketplace
+artifacts:
+  instructions: AGENTS.md
+  hooks-config: .zcode/config.json
+---

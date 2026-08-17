@@ -327,7 +327,7 @@ select_platform() {
     # `--platform ","`) yields an empty FLAG_LIST; bash 3.2 aborts.
     for p in ${FLAG_LIST[@]+"${FLAG_LIST[@]}"}; do
       case "$p" in
-        claude-code|generic|antigravity|codex|opencode|gemini-cli)
+        claude-code|generic|antigravity|codex|opencode|gemini-cli|zcode)
           PLATFORMS+=("$p")
           ;;
         both)
@@ -337,7 +337,7 @@ select_platform() {
           PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli")
           ;;
         *)
-          echo -e "  ${YELLOW}Unknown platform: $p (supported: claude-code, antigravity, codex, opencode, gemini-cli)${RESET}"
+          echo -e "  ${YELLOW}Unknown platform: $p (supported: claude-code, antigravity, codex, opencode, gemini-cli, zcode)${RESET}"
           ;;
       esac
     done
@@ -689,6 +689,7 @@ run_generators() {
       codex)       platforms_to_run=("codex") ;;
       opencode)    platforms_to_run=("opencode") ;;
       gemini-cli)  platforms_to_run=("gemini-cli") ;;
+      zcode)        platforms_to_run=("zcode") ;;
       *)           platforms_to_run=("claude-code") ;;
     esac
   fi
@@ -953,7 +954,7 @@ sage_update() {
     # Empty-safe expansion (see select_platform — same bash 3.2 guard).
     for p in ${FLAG_LIST[@]+"${FLAG_LIST[@]}"}; do
       case "$p" in
-        claude-code|generic|antigravity|codex|opencode|gemini-cli)
+        claude-code|generic|antigravity|codex|opencode|gemini-cli|zcode)
           PLATFORMS+=("$p") ;;
         all)
           PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli")
@@ -1776,7 +1777,7 @@ sage_help() {
   echo "Flags:"
   echo "  --prefix                         Namespace commands as sage:build, sage:fix, etc."
   echo "  --preset <name>                  Set constitution preset (base|startup|enterprise|opensource)"
-  echo "  --platform <list>                Comma-separated platforms (claude-code|antigravity|codex|opencode|gemini-cli|all)"
+  echo "  --platform <list>                Comma-separated platforms (claude-code|antigravity|codex|opencode|gemini-cli|zcode|all)"
   echo ""
   echo "Examples:"
   echo "  sage new my-app                  # Create project with Sage"
