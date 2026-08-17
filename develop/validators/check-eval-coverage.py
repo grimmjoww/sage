@@ -209,10 +209,13 @@ def discover(root):
     found = {}
     for kind, pattern in DISCOVERY:
         for p in sorted(root.glob(pattern)):
-            found[str(p.relative_to(root))] = kind
+            # surface_key() returns coverage.yaml paths (POSIX separators); on
+            # Windows str() renders backslashes, so every mapped row would
+            # simultaneously read STALE and duplicate itself as UNMAPPED.
+            found[p.relative_to(root).as_posix()] = kind
 
     if EAGER_BODY.exists():
-        rel = str(EAGER_BODY.relative_to(root))
+        rel = EAGER_BODY.relative_to(root).as_posix()
         for anchor, _s, _e in eager_anchors(EAGER_BODY.read_text()):
             found["%s::%s" % (rel, anchor)] = "eager-block"
     return found

@@ -150,7 +150,10 @@ def hardcoded_literals(root: pathlib.Path) -> list[tuple[str, int, str]]:
         rel = path.relative_to(root)
         if any(part in SCAN_EXCLUDE_DIRS for part in rel.parts):
             continue
-        if any(str(rel).startswith(p) for p in SCAN_EXCLUDE_PATHS):
+        # SCAN_EXCLUDE_PATHS entries are POSIX-style; on Windows str(rel) renders
+        # backslashes and the excludes silently stop matching (the excluded test
+        # fixtures then fail version drift on a clean checkout).
+        if any(rel.as_posix().startswith(p) for p in SCAN_EXCLUDE_PATHS):
             continue
         try:
             lines = path.read_text(errors="replace").splitlines()
