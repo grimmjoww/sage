@@ -30,13 +30,14 @@ attestations:
     verified: 2026-08-17
     expires-release: "1.5"
     note: >
-      Host source (zcode.cjs core.hooks) maps hook exit 2 to a block result
-      with permissionDecision "deny" and the stderr text as the model-visible
-      reason; exit 0 passes, any other exit fails the run. Reproduced locally:
-      unquoted backslash script paths rc 127 (the reason every sage plugin
-      hook failed on Windows until the quoting patch), quoted/forward-slash
-      paths rc 0. Live exit-2 veto canary installed in the workspace config;
-      re-probe on the next app restart.
+      PROVEN LIVE 2026-08-17T18:22:51Z: a PreToolUse(Read) hook exiting 2
+      blocked the call and its stderr reason reached the model verbatim.
+      Host source (zcode.cjs core.hooks) independently maps exit 2 to
+      permissionDecision "deny". Three prerequisites on Windows: quoted
+      hook paths (unquoted backslash paths rc 127 in bash), a real
+      python3.exe resolvable before WindowsApps, and Git\bin on PATH
+      (bash.exe is not on the default Windows PATH — Git's installer only
+      adds Git\cmd).
 
   - capability: post-tool-events
     evidence: docs/attestations/zcode-tier-a-2026-08-17.md
@@ -44,9 +45,10 @@ attestations:
     expires-release: "1.5"
     note: >
       ZCode log 2026-08-17 records plugin.sage PostToolUse hooks executing
-      after every Write|Edit (65 records) with matcher, source and duration —
-      they failed only on the unquoted-path bug, which the port's generator
-      fixes by double-quoting every ${CLAUDE_PROJECT_DIR} path.
+      after every Write|Edit (65 records) with matcher, source and duration.
+      After the Windows prerequisites were fixed (quoted paths, python3
+      resolution, Git\bin on PATH), a restarted session ran the full gate
+      set with ZERO hook.run.failed records — live green 2026-08-17T18:22Z.
 
   - capability: subagent-dispatch
     evidence: docs/attestations/zcode-tier-a-2026-08-17.md

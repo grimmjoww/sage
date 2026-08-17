@@ -76,14 +76,34 @@ A = pre-tool-veto ∧ post-tool-events ∧ subagent-dispatch — all attested
 above. Hooks-firing-inside-subagents (ADR-10's escape-hatch argument) is NOT
 yet probed on ZCode; re-probe before relying on independent-review semantics.
 
+## Live probe results (2026-08-17, post-fix)
+
+After three environment fixes — quoted hook paths, `python3.exe` beside
+`python.exe`, and `C:\Program Files\Git\bin` on the user PATH (bash.exe is
+NOT on the default Windows PATH; Git's installer only adds `Git\cmd`) —
+a restart made everything green:
+
+- **pre-tool-veto, proven live 18:22:51Z**: a PreToolUse(Read) hook
+  (diag canary in the workspace config) exited 2; the host BLOCKED the
+  Read and returned the hook's stderr text to the model verbatim —
+  "VETO-CANARY: deliberately blocking this Read to prove pre-tool-veto".
+- **Hook execution context captured**: the spawn runs through MSYS bash
+  (`/mingw64/bin:/usr/bin` leading PATH); `python3` resolved to the real
+  Python 3.13.15; payload JSON arrives on stdin with toolInput, sessionId,
+  mode and riskLevel.
+- **post-tool-events**: zero `hook.run.failed` records after the restart
+  (46 in the preceding hour); the sage plugin's Pre/PostToolUse gates now
+  run on every matching tool call without error.
+- Prerequisites recorded for reproducibility: Git Bash installed; its
+  `bin` dir on PATH; a real `python3` resolvable before WindowsApps.
+
 ## Rerunnable probes
 
-1. Veto canary: a PreToolUse(Read) hook that dumps its env and exits 2 is
-   installed in `~/.zcode/cli/config.json` (remove after use). Restart the
-   app, make the agent Read any file: the read must be blocked with the
-   canary's stderr reason, and `diag/canary.log` records the hook context's
-   PATH and python3 resolution.
-2. Path bug: run the three bash invocations above against any sage hook
+1. Veto canary (archived): a PreToolUse(Read) hook that dumps its env and
+   exits 2. On a fixed install the Read is blocked with the stderr reason;
+   `diag/canary.log` records the hook context's PATH and python3
+   resolution.
+2. Path bug: run the three bash invocations below against any sage hook
    script; only the unquoted backslash form fails.
 3. Event firing: trigger any Bash/Edit tool call with the sage plugin
    enabled and grep the day's log for `hook.run.*` records naming
