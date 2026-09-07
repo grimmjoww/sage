@@ -704,12 +704,40 @@ copy — do not edit it by hand.
         raise LayoutError("cannot stage the workspace runtime: %s" % exc) from exc
 
 
+_GIT_METADATA_ENTRIES = frozenset((
+    "head", "index", "objects", "refs", "config", "config.worktree",
+    "commondir", "gitdir", "packed-refs", "shallow", "worktrees", "modules",
+    "reftable", "info", "logs", "hooks", "description", "branches",
+    "orig_head", "fetch_head", "merge_head", "auto_merge", "rr-cache",
+))
+
+
 def _git_marker_above(path: pathlib.Path) -> bool:
+    """Retain possible Git ownership, not unrelated directories named .git.
+
+    A gitfile, alias, inaccessible marker, or even partially damaged Git
+    metadata is conservative evidence. A plain directory containing none of
+    Git's metadata cannot by its name alone claim every descendant workspace.
+    """
     current = path
     while True:
         marker = current / ".git"
-        if marker.exists() or marker.is_symlink():
-            return True
+        try:
+            metadata = marker.lstat()
+        except FileNotFoundError:
+            pass
+        except OSError as exc:
+            raise LayoutError("cannot inspect Git ownership marker: %s" % exc) from exc
+        else:
+            if (not stat.S_ISDIR(metadata.st_mode)
+                    or getattr(metadata, "st_file_attributes", 0) & _REPARSE_ATTRIBUTE):
+                return True
+            try:
+                names = {entry.name.casefold().removesuffix(".lock") for entry in marker.iterdir()}
+            except OSError as exc:
+                raise LayoutError("cannot inspect Git ownership marker: %s" % exc) from exc
+            if names & _GIT_METADATA_ENTRIES or any(name.startswith("sharedindex.") for name in names):
+                return True
         if current.parent == current:
             return False
         current = current.parent

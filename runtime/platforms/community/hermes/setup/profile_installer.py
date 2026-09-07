@@ -275,6 +275,90 @@ def _command_line(binding: profile_binding.ProfileBinding, bash_path: str, scrip
     )
 
 
+def _native_skill_directory_candidate(
+    text: str, binding: profile_binding.ProfileBinding
+) -> str:
+    """Expose native slash skills without re-dumping unrelated config text."""
+    yaml = hook_config.yaml
+    if yaml is None:
+        raise InstallError("PyYAML is unavailable; skills configuration cannot be parsed")
+    try:
+        root = yaml.compose(text, Loader=yaml.SafeLoader)
+        document = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        raise InstallError("skills configuration is not valid YAML") from exc
+
+    def field(mapping, name):
+        matches = [(key, value) for key, value in mapping.value
+                   if isinstance(key, yaml.ScalarNode) and key.value == name]
+        if len(matches) > 1:
+            raise InstallError("duplicate skills configuration field: %s" % name)
+        return matches[0] if matches else None
+
+    if not isinstance(root, yaml.MappingNode):
+        raise InstallError("skills configuration requires a profile mapping")
+    target = binding.profile_root / "plugins" / "sage" / "skills"
+    quoted = json.dumps(target.as_posix())
+    skills_field = field(root, "skills")
+    if skills_field is None:
+        if "skills" in document:
+            raise InstallError("skills configuration must use an explicit top-level field")
+        return text + "skills:\n  external_dirs:\n    - " + quoted + "\n"
+    skills_key, skills_node = skills_field
+    if not isinstance(skills_node, yaml.MappingNode):
+        raise InstallError("profile config skills must be a mapping")
+    dirs_field = field(skills_node, "external_dirs")
+    settings = document["skills"]
+    if dirs_field is None and "external_dirs" in settings:
+        raise InstallError("skills.external_dirs must use an explicit field")
+    if dirs_field is not None:
+        values = settings["external_dirs"]
+        if not isinstance(values, list) or any(
+            not isinstance(value, str) or not value.strip() for value in values
+        ):
+            raise InstallError("skills.external_dirs must be a list of nonempty strings")
+        for value in values:
+            expanded = pathlib.Path(os.path.expanduser(os.path.expandvars(value.strip())))
+            if not expanded.is_absolute():
+                expanded = binding.profile_root / expanded
+            if expanded.resolve() == target.resolve():
+                return text  # Preserve pre-existing user-owned spelling and ordering.
+
+    tokens = list(yaml.scan(text))
+    if skills_node.start_mark.index < skills_key.end_mark.index or any(
+        isinstance(token, (yaml.AnchorToken, yaml.AliasToken))
+        and skills_key.end_mark.index <= token.start_mark.index < skills_node.end_mark.index
+        for token in tokens
+    ):
+        raise InstallError("skills configuration uses shared YAML anchors/aliases; cannot edit it safely")
+
+    def append_flow(node, entry):
+        close = node.end_mark.index - 1
+        if not node.value:
+            return text[:close] + entry + text[close:]
+        last = node.value[-1][1] if isinstance(node, yaml.MappingNode) else node.value[-1]
+        end = last.end_mark.index
+        trailing_comma = any(isinstance(token, yaml.FlowEntryToken)
+                             and end <= token.start_mark.index < close for token in tokens)
+        separator = "" if trailing_comma else ","
+        return text[:end] + separator + text[end:close] + " " + entry + text[close:]
+
+    if dirs_field is None:
+        if skills_node.flow_style:
+            return append_flow(skills_node, "external_dirs: [" + quoted + "]")
+        first_key = skills_node.value[0][0]
+        position = text.rfind("\n", 0, first_key.start_mark.index) + 1
+        indent = " " * first_key.start_mark.column
+        addition = indent + "external_dirs:\n" + indent + "  - " + quoted + "\n"
+    else:
+        dirs_node = dirs_field[1]
+        if dirs_node.flow_style:
+            return append_flow(dirs_node, quoted)
+        position = text.rfind("\n", 0, dirs_node.end_mark.index) + 1
+        addition = " " * dirs_node.start_mark.column + "- " + quoted + "\n"
+    return text[:position] + addition + text[position:]
+
+
 def _config_candidate(
     current_text: str,
     binding: profile_binding.ProfileBinding,
@@ -397,14 +481,18 @@ def _config_candidate(
                 "      fail_closed: %s" % ("true" if entry["fail_closed"] else "false")
             )
             bodies.append("      timeout: 30")
+            if entry.get("file_preview_patterns"):
+                bodies.append("      file_preview_patterns: %s" % json.dumps(entry["file_preview_patterns"]))
         out[event_line + 1:event_line + 1] = bodies
-    if not re.search(r"^sage_profile_binding:\s*", "\n".join(out), re.MULTILINE):
+    # The parsed key is authoritative regardless of YAML quoting. Keep its
+    # original text rather than appending a duplicate or re-dumping user config.
+    if "sage_profile_binding" not in document:
         if out and out[-1].strip():
             out.append("")
         out.append("sage_profile_binding:")
         for key, value in binding.to_config_mapping().items():
             out.append("  %s: %s" % (key, json.dumps(value)))
-    return "\n".join(out) + "\n"
+    return _native_skill_directory_candidate("\n".join(out) + "\n", binding)
 
 
 def _owner_root(binding: profile_binding.ProfileBinding, owner: str) -> pathlib.Path:
@@ -441,60 +529,34 @@ def _preflight(
 
 
 def _config_binding_block(config_text: str) -> Mapping[str, Any]:
+    # Hermes may re-wrap scalars when saving YAML. Use its existing YAML
+    # dependency, inspecting nodes first so safe_load cannot hide duplicate
+    # authorities by silently keeping the last value.
+    yaml = hook_config.yaml
+    if yaml is None:
+        raise InstallError("PyYAML is unavailable; binding cannot be parsed")
     try:
-        document = json.loads(config_text)
-    except (TypeError, ValueError):
-        document = None
-    if isinstance(document, dict) and isinstance(document.get("sage_profile_binding"), dict):
-        return document["sage_profile_binding"]
-    match = re.search(
-        r"^sage_profile_binding:\s*(\{.*\})\s*$", config_text, re.MULTILINE
-    )
-    if match:
-        try:
-            return json.loads(match.group(1))
-        except (TypeError, ValueError) as exc:
-            raise InstallError("sage_profile_binding block is not valid JSON: %s" % exc)
-
-    # The generator writes canonical YAML as one top-level key followed by
-    # exactly two-space-indented JSON scalars. Parse that narrow shape without
-    # adding a YAML dependency to the atomic installer.
-    lines = config_text.splitlines()
-    starts = [index for index, line in enumerate(lines) if line == "sage_profile_binding:"]
-    if len(starts) > 1:
-        raise InstallError("config contains duplicate sage_profile_binding authorities")
-    if len(starts) == 1:
-        block: Dict[str, Any] = {}
-        for line in lines[starts[0] + 1:]:
-            if line and not line[0].isspace():
-                break
-            if not line.strip() or line.lstrip().startswith("#"):
-                continue
-            if not line.startswith("  ") or line.startswith("   ") or ":" not in line[2:]:
-                raise InstallError("sage_profile_binding block has invalid indentation")
-            key, raw_value = line[2:].split(":", 1)
-            if key in block:
-                raise InstallError(
-                    "sage_profile_binding block contains a duplicate field: %s" % key
-                )
-            raw_stripped = raw_value.strip()
-            try:
-                block[key] = json.loads(raw_stripped)
-            except (TypeError, ValueError):
-                # Hermes config writers re-dump Sage's JSON-quoted binding
-                # values as plain YAML scalars; accept the plain form
-                # (optionally quoted) so the authority survives that
-                # round-trip. Path spellings are normalized downstream.
-                value = raw_stripped
-                if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
-                    value = value[1:-1]
-                if not value:
-                    raise InstallError(
-                        "sage_profile_binding field %s is empty" % key
-                    )
-                block[key] = value
-        return block
-    raise InstallError("config is missing the sage_profile_binding authority")
+        node = yaml.compose(config_text, Loader=yaml.SafeLoader)
+        if not isinstance(node, yaml.MappingNode):
+            raise InstallError("config must be a mapping")
+        bindings = [value for key, value in node.value
+                    if isinstance(key, yaml.ScalarNode) and key.value == "sage_profile_binding"]
+        if len(bindings) > 1:
+            raise InstallError("config contains duplicate sage_profile_binding authorities")
+        if not bindings:
+            raise InstallError("config is missing the sage_profile_binding authority")
+        if not isinstance(bindings[0], yaml.MappingNode):
+            raise InstallError("sage_profile_binding must be a mapping")
+        seen = set()
+        for key, _value in bindings[0].value:
+            if not isinstance(key, yaml.ScalarNode) or key.tag != "tag:yaml.org,2002:str":
+                raise InstallError("sage_profile_binding fields must be explicit string keys")
+            if key.value in seen:
+                raise InstallError("sage_profile_binding block contains a duplicate field: %s" % key.value)
+            seen.add(key.value)
+        return yaml.safe_load(config_text)["sage_profile_binding"]
+    except yaml.YAMLError as exc:
+        raise InstallError("config binding is not valid YAML: %s" % exc) from exc
 
 
 def _binding_mismatches(block: Mapping[str, Any], expected_fields: Mapping[str, str]) -> List[str]:

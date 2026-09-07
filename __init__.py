@@ -26,7 +26,15 @@ from urllib.parse import unquote, urlparse
 
 
 LOGGER = logging.getLogger(__name__)
-PLUGIN_VERSION = "1.3.18"
+# Single source of truth: the VERSION file at the plugin root. The runtime
+# version check (_validate_runtime) requires workspace/sage/VERSION to equal
+# this constant; deriving it here ends the 1.3.18/1.3.21 drift class
+# (2026-08-30 diagnosis: "plugin.yaml version lag").
+with open(
+    pathlib.Path(__file__).absolute().parent / "VERSION", encoding="utf-8"
+) as _version_file:
+    PLUGIN_VERSION = _version_file.read().strip()
+
 MAX_AUTHORITY_BYTES = 1024 * 1024
 MAX_CONTEXT_BYTES = 2 * 1024 * 1024
 
@@ -69,24 +77,18 @@ RUNTIME_TOOLS = (
     "memory_sync.py",
 )
 
-COMMAND_SPECS = (
-    ("sage", "sage", "", "Route a request through Sage."),
-    ("sage-build", "sage-build", "", "Run the Sage build workflow."),
-    ("sage-fix", "sage-fix", "", "Run the Sage fix workflow."),
-    ("sage-architect", "sage", "/architect", "Run the Sage architecture workflow."),
-    ("sage-analyze", "sage-review", "--ux", "Run the Sage UX analysis compatibility route."),
-    ("sage-learn", "sage-learn", "", "Run the Sage learn workflow."),
-    ("sage-map", "sage-learn", "--ontology", "Run the Sage ontology-map compatibility route."),
-    ("sage-qa", "sage-review", "--browser", "Run the Sage browser-QA compatibility route."),
-    ("sage-reflect", "sage-reflect", "", "Run the Sage reflection workflow."),
-    ("sage-research", "sage", "/research", "Run the Sage product research route."),
-    ("sage-review", "sage-review", "", "Run the Sage review workflow."),
-    ("sage-status", "sage-continue", "", "Resume the active Sage initiative."),
-    ("sage-design", "sage", "/design", "Run the Sage product design route."),
-    ("sage-design-review", "sage-review", "--design", "Run the Sage design-review compatibility route."),
-    ("sage-continue", "sage-continue", "", "Resume the active Sage initiative."),
-    ("sage-autoresearch", "sage-autoresearch", "", "Run the Sage autoresearch workflow."),
-)
+# Slash commands are deliberately NOT registered (2026-09-01, Willie's bug):
+# Hermes prints a plugin *command*'s return value to the user (cli.py
+# `_cprint(str(result))`; gateway returns it as the reply) — it never reaches
+# the model. ctx.register_skill() exposes the 21 namespaced skill_view entries;
+# the installer's skills.external_dirs entry separately enables Hermes' native
+# /sage-* skill commands, which DO load into the model turn. The registration
+# alone does not enable native slash discovery. Registering the same names as
+# commands double-listed them in the picker and let the command win
+# dispatch, pasting the skill body as chat output instead of running it.
+# Compatibility aliases (/sage-status -> sage-continue, etc.) are gone; the
+# canonical skill names are the commands.
+COMMAND_SPECS: Tuple[Tuple[str, str, str, str], ...] = ()
 
 REGISTERED_COMMANDS = tuple(row[0] for row in COMMAND_SPECS)
 REGISTERED_TOOLS = (
@@ -692,6 +694,28 @@ def _load_runtime_module(path: pathlib.Path):
     return module
 
 
+def _gate_bash_executable() -> str:
+    if os.name == "nt":
+        # Windows also ships System32/bash.exe, which is a WSL launcher and
+        # cannot execute this native profile's paths. Resolve Git's own shell.
+        git = shutil.which("git")
+        if git:
+            git_dir = pathlib.Path(git).resolve().parent
+            candidates = [git_dir / "bash.exe", git_dir.parent / "bin" / "bash.exe"]
+            if git_dir.name.casefold() == "bin" and git_dir.parent.name.casefold() in {
+                "mingw64", "mingw32", "clangarm64", "ucrt64",
+            }:
+                candidates.append(git_dir.parent.parent / "bin" / "bash.exe")
+            for candidate in candidates:
+                if candidate.is_file():
+                    return os.fspath(candidate.resolve())
+        raise PluginAuthorityError("Git Bash is required for native Windows Sage gates")
+    bash = shutil.which("bash")
+    if not bash:
+        raise PluginAuthorityError("bash is required for the bound Sage deterministic gate tools")
+    return os.fspath(pathlib.Path(bash).resolve())
+
+
 def _validate_runtime(binding) -> PluginBinding:
     workspace = binding.workspace_root
     runtime = _require_plain_directory(
@@ -791,11 +815,7 @@ def _validate_runtime(binding) -> PluginBinding:
         label="bound gate modes",
         max_bytes=MAX_AUTHORITY_BYTES,
     )
-    bash_executable = shutil.which("bash")
-    if not bash_executable:
-        raise PluginAuthorityError(
-            "bash is required for the bound Sage deterministic gate tools"
-        )
+    bash_executable = _gate_bash_executable()
 
     return PluginBinding(
         authority=binding,
@@ -1040,12 +1060,20 @@ def _run_script_data(
     if script is None:
         raise PluginAuthorityError("unregistered bound gate script: %s" % script_name)
     command = [binding.bash_executable, os.fspath(script), *argv]
+    if os.name == "nt" and script_name == "sage-spec-check.sh":
+        runner = binding.runtime_root / "runtime/platforms/community/hermes/gate-runner.sh"
+        _read_plain_text(runner, owner=binding.runtime_root,
+                         label="bound Windows formal-gate runner", max_bytes=MAX_CONTEXT_BYTES)
+        command = [binding.bash_executable, os.fspath(runner), sys.executable,
+                   os.fspath(script), *argv]
     try:
         completed = subprocess.run(
             command,
             cwd=os.fspath(binding.workspace_root),
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
             check=False,
         )

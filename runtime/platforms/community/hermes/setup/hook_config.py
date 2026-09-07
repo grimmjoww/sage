@@ -35,10 +35,10 @@ _REGISTRY = (
     # Seven blocking pre-tool gates (spec 5.3.6-7).
     {"event": "pre_tool_call", "matcher": "write_file|patch", "script": "sage-spec-gate.sh", "fail_closed": True},
     {"event": "pre_tool_call", "matcher": "write_file|patch", "script": "sage-tdd-gate.sh", "fail_closed": True},
-    {"event": "pre_tool_call", "matcher": "write_file|patch", "script": "sage-bookkeeping-gate.sh", "fail_closed": True},
+    {"event": "pre_tool_call", "matcher": "write_file|patch", "script": "sage-bookkeeping-gate.sh", "fail_closed": True, "file_preview_patterns": (".sage/work/*/manifest.md", ".sage/work/*/decisions.md")},
     {"event": "pre_tool_call", "matcher": "write_file|patch", "script": "sage-secrets-gate.sh", "fail_closed": True},
     {"event": "pre_tool_call", "matcher": "terminal", "script": "sage-verify-gate.sh", "fail_closed": True},
-    {"event": "pre_tool_call", "matcher": "write_file|patch|terminal", "script": "sage-config-gate.sh", "fail_closed": True},
+    {"event": "pre_tool_call", "matcher": "write_file|patch|terminal", "script": "sage-config-gate.sh", "fail_closed": True, "file_preview_patterns": (".sage/config.yaml",)},
     {"event": "pre_tool_call", "matcher": "write_file|patch", "script": "sage-scope-gate.sh", "fail_closed": True},
     # Four post-tool observers.
     {"event": "post_tool_call", "matcher": "write_file|patch|terminal", "script": "sage-verify-tracker.sh", "fail_closed": False},
@@ -54,7 +54,8 @@ _ADAPTER_MARKER = "sage-hermes-gate.sh"
 def expected_registry() -> List[Dict[str, Any]]:
     """A fresh copy of the canonical session + 7 blocking + 4 observer registry."""
 
-    return [dict(entry) for entry in _REGISTRY]
+    return [dict(entry, **({"file_preview_patterns": list(entry["file_preview_patterns"])}
+                          if "file_preview_patterns" in entry else {})) for entry in _REGISTRY]
 
 
 def _entry_scripts(command: str) -> List[str]:
@@ -152,6 +153,14 @@ def validate_candidate_config(text: str) -> Dict[str, Any]:
                 "%s matcher drift: %r != canonical %r"
                 % (script, entry.get("matcher"), canonical["matcher"])
             )
+        # Older receipts legitimately omit this additive transport capability.
+        # If declared, it must be the exact narrowly owned request, not a
+        # broad full-file scan. Fresh activation separately requires it.
+        if "file_preview_patterns" in entry:
+            expected_patterns = canonical.get("file_preview_patterns")
+            if (expected_patterns is None or
+                    entry["file_preview_patterns"] != list(expected_patterns)):
+                errors.append("%s file preview request drift" % script)
         if script in seen:
             errors.append("duplicate Sage entry: %s" % script)
         seen.add(script)
@@ -269,6 +278,8 @@ def extract_sage_records(text: str) -> Dict[str, Any]:
                     "command": command,
                     "matcher": entry.get("matcher"),
                     "fail_closed": entry.get("fail_closed"),
+                    **({"file_preview_patterns": list(entry["file_preview_patterns"])}
+                       if "file_preview_patterns" in entry else {}),
                 }
             )
     ordered: List[Dict[str, Any]] = []

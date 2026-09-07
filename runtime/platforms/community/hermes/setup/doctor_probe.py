@@ -186,7 +186,7 @@ def probe(
     binding: profile_binding.ProfileBinding,
     bash_path: str,
     hermes_command: Sequence[str],
-    timeout: int = 60,
+    timeout: int | None = None,
 ) -> Dict[str, Any]:
     """Run the public Hermes doctor proof in one fresh read-only process."""
 
@@ -204,6 +204,15 @@ def probe(
     expectation = _build_public_expectation(
         binding, nonce=nonce, parent_pid=parent_pid
     )
+    if timeout is None:
+        # The child executes these probes serially. Keep the existing bounded
+        # 60-second non-probe allowance, plus each actual invocation's declared
+        # hook budget; an unexecuted hook contributes nothing. Explicit caller
+        # timeouts remain exact. This changes no individual hook timeout.
+        timeout = 60 + sum(
+            expectation["shell_hooks"][item["hook_index"]]["timeout"]
+            for item in expectation["policy_probes"]
+        )
     descriptor, raw_path = tempfile.mkstemp(
         prefix="sage-hermes-doctor-", suffix=".json"
     )

@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Iterable, Mapping, Sequence, Tuple
 
 import profile_binding
+import hook_config
 
 
 class ActivationError(RuntimeError):
@@ -308,6 +309,13 @@ def build_expectation(
                 "fail_closed": bool(record.get("fail_closed")),
             }
         )
+        # A stale host must not prove activation by silently ignoring the new
+        # opt-in request. Required capabilities come from the installed platform,
+        # not from the potentially incomplete configuration being checked.
+        for entry in hook_config.expected_registry():
+            if (entry.get("file_preview_patterns") and entry["event"] == record["event"]
+                    and entry["script"] in hook_config._entry_scripts(record["command"])):
+                hooks[-1]["file_preview_patterns"] = list(entry["file_preview_patterns"])
     hooks = sorted(hooks, key=_hook_sort_key)
     probe_index = next(
         (
@@ -337,7 +345,6 @@ def build_expectation(
                     "tool_input": {
                         "path": safe_path,
                         "content": "activation proof safe payload\n",
-                        "sage_activation_probe": "allow",
                     },
                     "cwd": os.fspath(binding.workspace_root),
                 },
@@ -354,7 +361,6 @@ def build_expectation(
                             "PAY_KEY=" + "pfk_" + "live_"
                             + "9Fq2XvR7tLpZ4NcW8HbY3sKd\n"
                         ),
-                        "sage_activation_probe": "block",
                     },
                     "cwd": os.fspath(binding.workspace_root),
                 },
@@ -366,12 +372,9 @@ def build_expectation(
                 "payload": {
                     "tool_name": "write_file",
                     "tool_input": {
-                        "path": safe_path,
                         "content": "activation proof unresolved payload\n",
-                        "sage_activation_probe": "unverifiable",
                     },
                     "cwd": os.fspath(binding.workspace_root),
-                    "target_resolution_error": "activation proof synthetic unresolved target",
                 },
             },
         ],
@@ -404,6 +407,8 @@ def _topology_expectation(
             "command": record["command"],
             "timeout": 30,
             "fail_closed": bool(record.get("fail_closed")),
+            **({"file_preview_patterns": list(record["file_preview_patterns"])}
+               if "file_preview_patterns" in record else {}),
         }
         for record in config_records
     ]

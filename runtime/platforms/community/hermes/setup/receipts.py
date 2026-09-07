@@ -188,7 +188,10 @@ def _config_records(
     ):
         item_label = "%s[%d]" % (label, index)
         mapping = _require_mapping(item, item_label)
-        _require_exact_fields(mapping, _CONFIG_RECORD_FIELDS, item_label)
+        fields = _CONFIG_RECORD_FIELDS
+        if "file_preview_patterns" in mapping:
+            fields += ("file_preview_patterns",)
+        _require_exact_fields(mapping, fields, item_label)
         event = _hook_event(mapping["event"], item_label + ".event")
         command = _hook_command(mapping["command"], item_label + ".command")
         matcher = mapping["matcher"]
@@ -220,6 +223,12 @@ def _config_records(
                 "fail_closed": fail_closed,
             }
         )
+        if "file_preview_patterns" in mapping:
+            patterns = mapping["file_preview_patterns"]
+            if (not isinstance(patterns, list) or not patterns or
+                    any(not isinstance(pattern, str) or not pattern.strip() for pattern in patterns)):
+                raise ReceiptError("%s.file_preview_patterns must be a nonempty string array" % item_label)
+            records[-1]["file_preview_patterns"] = list(patterns)
 
     identities = [_canonical_bytes(record) for record in records]
     if len(identities) != len(set(identities)):

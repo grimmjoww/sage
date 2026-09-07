@@ -469,8 +469,9 @@ else:
         raise SystemExit(1)
     command = [executable]
 
+args = command + (["--profile", profile, "config", "path"] if profile else ["config", "path"])
 completed = subprocess.run(
-    command + ["--profile", profile, "config", "path"],
+    args,
     capture_output=True,
     text=True,
     check=False,
@@ -492,6 +493,20 @@ prepare_hermes_selection() {
   local raw_home="${HERMES_HOME_FLAG:-${HERMES_HOME:-}}"
   local display_home="${raw_home:-<collection>}"
 
+  if [ -z "${HERMES_PROFILE_FLAG:-}" ]; then
+    # The default profile is a first-class target: bare `sage init --platform
+    # hermes` installs to whatever profile hermes itself treats as default.
+    # Prompt or refuse only when the default cannot be resolved.
+    local default_native default_shell default_profile
+    if default_native="$(discover_hermes_profile_config "")" && [ -n "$default_native" ]; then
+      default_shell="$(shell_path_from_native "$default_native")"
+      default_profile="$(basename "$(dirname "$default_shell")")"
+      if [[ "$default_profile" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]]; then
+        HERMES_PROFILE_FLAG="$default_profile"
+        echo -e "  ${GREEN}Hermes profile: ${RESET}${HERMES_PROFILE_FLAG} ${DIM}(default)${RESET}" >&2
+      fi
+    fi
+  fi
   if [ -z "${HERMES_PROFILE_FLAG:-}" ]; then
     if [ -t 0 ]; then
       echo "" >&2

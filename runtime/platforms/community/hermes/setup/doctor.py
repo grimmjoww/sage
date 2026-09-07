@@ -129,21 +129,19 @@ def _apply_behavioral_evidence(
 
 
 def _command_argv(command: str) -> Optional[List[str]]:
-    """Decode the YAML double-quoted scalar, then split like Hermes does."""
+    """Split the already decoded YAML command like Hermes does."""
 
     try:
-        return shlex.split(command.replace('\\"', '"'))
+        return shlex.split(command)
     except ValueError:
         return None
 
 
 def _sage_commands(config_text: str) -> List[str]:
-    commands = []
-    for line in config_text.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("command:") and "sage-hermes-gate.sh" in stripped:
-            commands.append(stripped[len("command:"):].strip().strip('"'))
-    return commands
+    """Use the same validated, decoded hook records as the installer."""
+
+    records = hook_config.extract_sage_records(config_text)
+    return [record["command"] for record in records["config_records"]]
 
 
 def diagnose(
@@ -238,11 +236,19 @@ def diagnose(
         argv_detail = "bash executable not found: %s" % bash_path
     else:
         seen = set()
-        for command in _sage_commands(config_text):
+        try:
+            commands = _sage_commands(config_text)
+        except ValueError as exc:
+            commands = []
+            argv_ok = False
+            argv_detail = "hook commands could not be validated: %s" % exc
+        for command in commands:
             argv = _command_argv(command)
-            if not argv or len(argv) != 3:
+            is_session = bool(argv and len(argv) == 2 and
+                              argv[1].replace("\\", "/").endswith("/sage-session-init.sh"))
+            if not argv or (len(argv) != 3 and not is_session):
                 argv_ok = False
-                argv_detail = "command does not split to bash/adapter/script: %s" % command[:60]
+                argv_detail = "command does not split to bash/session or bash/adapter/script: %s" % command[:60]
                 break
             exe = argv[0]
             if exe in seen:
