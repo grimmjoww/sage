@@ -1,0 +1,107 @@
+---
+name: minimax-code
+description: >
+  MiniMax Code — the MCode desktop agent runtime. Sage runs here as a local
+  Plugin: a `PreToolUse` hook that can reject a tool call before it runs, a
+  `PostToolUse` audit trail, and `SessionStart` context injection. The four
+  Claude Code veto gates are ported by extraction rather than rewrite.
+contract-version: 2
+maintainer: "rei-stewart"
+
+capabilities:
+  context-injection: true
+  command-delivery: false
+  native-skill-discovery: attested
+  pre-tool-veto: attested
+  post-tool-events: attested
+  subagent-dispatch: true
+  session-events: attested
+  context-injection-midstream: false
+
+attestations:
+  - capability: pre-tool-veto
+    evidence: docs/attestations/minimax-code-veto-2026-10-03.md
+    verified: 2026-10-03
+    expires-release: "1.4"
+    note: >
+      MiniMax is a plugin-API platform: the hook ships inside the installed
+      Plugin package, not as a file in the user's project, so conformance
+      Level 1 cannot see it by inspecting generated output. The veto is
+      nonetheless the most-proven thing in this port — setup/verify_veto.py
+      runs the real adapter against real fixtures and gets 4/4, in BOTH
+      directions. It is `attested` rather than `true` only because no FREE
+      check in the repo can observe a plugin-API surface, which is exactly
+      the situation R112 was written for.
+
+  - capability: post-tool-events
+    evidence: docs/attestations/minimax-code-post-tool-2026-10-03.md
+    verified: 2026-10-03
+    expires-release: "1.4"
+    note: >
+      PostToolUse appends one JSONL record per completed tool call to
+      .sage/gates/audit.jsonl. Verified by setup/verify_hooks.py cases 3-4,
+      including the negative case that proves no file is written outside a
+      Sage project.
+
+  - capability: session-events
+    evidence: docs/attestations/minimax-code-session-events-2026-10-03.md
+    verified: 2026-10-03
+    expires-release: "1.4"
+    note: >
+      SessionStart fires with hookSpecificOutput.additionalContext carrying the
+      active cycle. Verified by setup/verify_hooks.py case 1, with case 2
+      proving total silence outside a Sage project. Attested for the same
+      plugin-API reason as pre-tool-veto.
+
+  - capability: native-skill-discovery
+    evidence: docs/attestations/minimax-code-skill-discovery-2026-10-03.md
+    verified: 2026-10-03
+    expires-release: "1.4"
+    note: >
+      Skills register through the host plugin system rather than being
+      written into the project. MCode matches a Skill's frontmatter
+      description against the request — the mechanism behind its own built-in
+      catalog. R112 applies directly: Level 3 carries the proof.
+
+# The honest position on the two `false` values, because a `false` must also
+# be true (conformance checks that direction too).
+#
+#   command-delivery   FALSE — MiniMax Plugin V1 has no command declaration.
+#   `.minimax-plugin/plugin.json` carries schemaVersion, name, version,
+#   description, author, icon, category, exampleQueries, apps, mcpServers,
+#   skills, hooks. There is no commands array. The capability does not exist
+#   in the host, so the generator creates nothing in the project — and
+#   conformance confirms the commands directory stays absent rather than
+#   trusting this comment.
+#
+#   context-injection- FALSE — the scope judge's mid-session correction
+#   midstream               channel is not ported. Sage ships scope_judge.py
+#                           DISABLED upstream anyway (E-JUDGE-1: one false
+#                           positive in four clean runs, detection
+#                           unmeasurable), so little is lost in practice —
+#                           but claiming it here would be the exact "sentence
+#                           in a README asserting it works" that conformance
+#                           Level 3 exists to delete.
+#
+# `context-injection` stays `true` rather than `attested` because it is NOT a
+# plugin-API claim: MiniMax reads a project-root AGENTS.md, the generator
+# writes one, and Level 1 sees it on disk. That is a file, checkable for free.
+
+# Tier is DERIVED by runtime/tools/contract.py, never declared here.
+#   A = pre-tool-veto ∧ post-tool-events ∧ subagent-dispatch
+# `attested` counts as granted, so A survives attesting. Verified:
+#   $ python3 runtime/tools/contract.py --check
+#   ... minimax-code   tier A  (community)
+
+artifacts:
+  instructions: AGENTS.md      # what MiniMax Code reads at the project root
+  commands-dir: null           # command-delivery is false; generate nothing
+  skills-dir: null             # R112 — skills register through the host
+  hooks-config: null           # R112 — hooks ship inside the Plugin package
+
+supported-os: [windows, linux, macos]
+command-prefix: "sage"
+install-method: "plugin-marketplace"
+
+requires:
+  - "python3 on PATH, or an absolute interpreter in each hook's commandWindows"

@@ -1,0 +1,42 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/scripts/session_start.py\"",
+            "commandWindows": "\"C:\\Users\\willi\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\" \"${PLUGIN_ROOT}\\scripts\\session_start.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "edit|write|bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/scripts/pre_tool_gate.py\"",
+            "commandWindows": "\"C:\\Users\\willi\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\" \"${PLUGIN_ROOT}\\scripts\\pre_tool_gate.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "bash|write|edit|read|grep|glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/scripts/post_tool_journal.py\"",
+            "commandWindows": "\"C:\\Users\\willi\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\" \"${PLUGIN_ROOT}\\scripts\\post_tool_journal.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

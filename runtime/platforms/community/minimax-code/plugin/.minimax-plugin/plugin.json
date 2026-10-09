@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "name": "sage",
+  "displayName": "Sage",
+  "version": "0.1.0",
+  "description": "Sage for MiniMax Code — governed engineering with real enforcement. Blocks pre-spec source edits, unmarked test-less changes, and secret writes before the tool runs, not after.",
+  "author": "Rei Stewart",
+  "icon": "icon.png",
+  "darkIcon": "icon-dark.png",
+  "category": "Code",
+  "exampleQueries": [
+    "What Sage gate blocked my edit?",
+    "Start a Sage BUILD cycle and write the spec first.",
+    "Show me the Sage audit trail for this session."
+  ],
+  "apps": [],
+  "mcpServers": [],
+  "skills": [
+    "skills/sage/SKILL.md",
+    "skills/sage-gates/SKILL.md"
+  ],
+  "hooks": [
+    "hooks/hooks.json"
+  ]
+}
