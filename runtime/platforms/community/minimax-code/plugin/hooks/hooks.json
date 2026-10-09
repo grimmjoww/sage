@@ -36,6 +36,28 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "bash|write|edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/scripts/gates/verify_tracker.py\"",
+            "commandWindows": "\"C:\\Users\\willi\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\" \"${PLUGIN_ROOT}\\scripts\\gates\\verify_tracker.py\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "bash|write|edit|read|grep|glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/scripts/gates/degradation_log.py\"",
+            "commandWindows": "\"C:\\Users\\willi\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\" \"${PLUGIN_ROOT}\\scripts\\gates\\degradation_log.py\"",
+            "timeout": 5
+          }
+        ]
       }
     ]
   }
