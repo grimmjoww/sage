@@ -548,15 +548,15 @@ hard_enforcement: true
 # test. New projects default ON, because the rule was measured and it did not hold:
 # asked to change one constant under pressure the agent wrote no test in 3 runs of 3,
 # with the tdd skill loaded. A rule the model can talk itself out of is not a rule.
-# Escape with `tier: tier1` on a manifest, or set this to false.
+# Escape with 'tier: tier1' on a manifest, or set this to false.
 tdd_enforcement: true
 # scope_gate: the scope-gate hook blocks Edit/Write to paths outside the
 # approved plan's derived scope (manifest scope: block, written by
-# `manifest.py scope derive`). MEASURED 2026-08-02 and left OFF: bare and
+# 'manifest.py scope derive'). MEASURED 2026-08-02 and left OFF: bare and
 # gated both held scope 3/3 at two model tiers, so the gate prevented
 # nothing (harmless and fast — arm it if you want the floor, but it is not
 # a drift-prevention claim). standard+ gates cycles with
-# manifests and skips tier1; `all` gates tier1 cycles too. Legal exits from a
+# manifests and skips tier1; 'all' gates tier1 cycles too. Legal exits from a
 # block: scope add-collateral (recorded), or amend the plan + scope derive
 # --refresh. Scope changes go through the artifact, never silently through
 # the diff. ABSENT means off (it ships that way); arm by writing ONE line:
