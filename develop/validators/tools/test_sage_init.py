@@ -23,6 +23,7 @@ absence never turns a failure into a pass — the structural checks always run).
 """
 from __future__ import annotations
 
+import os
 import pathlib
 import re
 import shutil
@@ -32,6 +33,24 @@ import unittest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 SAGE_BIN = REPO_ROOT / "bin" / "sage"
+
+
+def _bash() -> str:
+    """A bash that can actually see this repository.
+
+    On Windows a bare "bash" on PATH is usually WSL's, and WSL cannot open a
+    Windows path at all — it reported "No such file or directory" for a file
+    that plainly exists. Prefer Git Bash when it is installed, and fall back to
+    whatever bash the PATH offers (correct on macOS/Linux).
+    """
+    candidates = [
+        pathlib.Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Git" / "bin" / "bash.exe",
+        pathlib.Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "Git" / "bin" / "bash.exe",
+    ]
+    for candidate in candidates:
+        if candidate.is_file():
+            return str(candidate)
+    return "bash"
 
 ANSI = re.compile(r"\x1b\[")
 # A YAML line that is not blank, not a comment, and not indented continuation.
@@ -53,7 +72,10 @@ class SageInitTest(unittest.TestCase):
         subprocess.run(["git", "init", "-q"], cwd=cls.proj, check=True)
 
         proc = subprocess.run(
-            ["bash", str(SAGE_BIN), "init", "--preset", "base"],
+            # as_posix, not str(): on Windows str() yields backslashes and the
+            # shell strips them as escapes, so bash was invoked with
+            # "C:Users...binsage" and every test failed for a path typo.
+            [_bash(), SAGE_BIN.as_posix(), "init", "--preset", "base"],
             cwd=cls.proj, capture_output=True, text=True,
             stdin=subprocess.DEVNULL,
             env={**__import__("os").environ, "SAGE_HOME": str(home)},

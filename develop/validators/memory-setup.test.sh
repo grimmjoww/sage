@@ -24,7 +24,7 @@ T="$(mktemp -d)"; mk_proj "$T"
 ( cd "$T" && bash "$BIN" setup memory ) >/dev/null 2>&1
 grep -q '"sage-memory"' "$T/.mcp.json" 2>/dev/null && check "fresh: .mcp.json created with sage-memory" 0 || check "fresh: .mcp.json created with sage-memory" 1
 grep -qxF '.sage-memory/' "$T/.gitignore" 2>/dev/null && check "fresh: .gitignore covers .sage-memory/" 0 || check "fresh: .gitignore covers .sage-memory/" 1
-python3 -c "import json,sys; json.load(open('$T/.mcp.json'))" 2>/dev/null && check "fresh: .mcp.json is valid JSON" 0 || check "fresh: .mcp.json is valid JSON" 1
+python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$T/.mcp.json" 2>/dev/null && check "fresh: .mcp.json is valid JSON" 0 || check "fresh: .mcp.json is valid JSON" 1
 
 # 2) Idempotent: running again does not duplicate the entry.
 ( cd "$T" && bash "$BIN" setup memory ) >/dev/null 2>&1
@@ -46,7 +46,7 @@ cat > "$T/.mcp.json" <<'JSON'
 JSON
 ( cd "$T" && bash "$BIN" setup memory ) >/dev/null 2>&1
 grep -q '"other-server"' "$T/.mcp.json" && check "merge: existing 'other-server' preserved (never clobbered)" 0 || check "merge: existing 'other-server' preserved (never clobbered)" 1
-python3 -c "import json; json.load(open('$T/.mcp.json'))" 2>/dev/null && check "merge: .mcp.json still valid JSON" 0 || check "merge: .mcp.json still valid JSON" 1
+python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$T/.mcp.json" 2>/dev/null && check "merge: .mcp.json still valid JSON" 0 || check "merge: .mcp.json still valid JSON" 1
 if [ "$HAS_JQ" -eq 1 ]; then
   grep -q '"sage-memory"' "$T/.mcp.json" && check "merge (jq): sage-memory added alongside other-server" 0 || check "merge (jq): sage-memory added alongside other-server" 1
 else

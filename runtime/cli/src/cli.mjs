@@ -259,6 +259,30 @@ Each waiver needs: reason, scope, approved-by, expires. -->
 function installPlatform(projectDir, sageDir, platformName) {
   console.log(`\n${c.blue}Setting up ${platformName} adapter...${c.reset}`);
 
+  // A community platform ships its own generator with a documented
+  // `sage init --platform <name>` contract. Run that when it exists, so the
+  // adapter's own files are what gets installed. Without this the platform
+  // falls through to the generic branch below, which writes CLAUDE.md and
+  // silently installs nothing of the adapter's — a thinner setup that still
+  // reports success. If the generator exists and fails, say so and stop:
+  // a loud failure is better than a quiet downgrade.
+  const communityGen = resolve(
+    REPO_ROOT, '..', 'platforms', 'community', platformName, 'setup',
+    `generate-${platformName}.sh`,
+  );
+  if (existsSync(communityGen)) {
+    try {
+      execSync(`bash "${communityGen}" "${projectDir}"`, { stdio: 'inherit' });
+    } catch (error) {
+      console.log(`  ${c.red}✗${c.reset} ${platformName} generator failed: ${error.message}`);
+      console.log(`  ${c.dim}Nothing was installed. Fix the generator and run it again:${c.reset}`);
+      console.log(`  ${c.cyan}bash "${communityGen}" "${projectDir}"${c.reset}`);
+      process.exit(1);
+    }
+    console.log(`  ${c.green}✓${c.reset} Tier 1 platform ready: subagents, parallel execution, worktrees`);
+    return;
+  }
+
   if (platformName === 'claude-code' || platformName === 'codex') {
     // Claude Code / Codex use CLAUDE.md as the primary system prompt
     const claudeMd = generateClaudeCodeMd(platformName);
@@ -575,6 +599,7 @@ async function commandInit(args) {
       platform = await select(rl, 'Which AI coding tool are you using?', [
         { value: 'claude-code', label: 'Claude Code', desc: 'Tier 1 — full subagent support' },
         { value: 'codex',       label: 'Codex CLI',   desc: 'Tier 1 — subagent support' },
+        { value: 'minimax-code', label: 'MiniMax Code', desc: 'Tier 1 — hooks, subagents, AGENTS.md' },
         { value: 'cursor',      label: 'Cursor',      desc: 'Tier 2 — rules file' },
         { value: 'copilot',     label: 'GitHub Copilot', desc: 'Tier 2 — instructions file' },
         { value: 'generic',     label: 'Other / Generic', desc: 'Tier 2 — CLAUDE.md system prompt' },
@@ -604,7 +629,8 @@ async function commandInit(args) {
     // Confirmation
     console.log(`\n${c.bold}── Installation Summary ──${c.reset}`);
     console.log(`  Directory:     ${projectDir}`);
-    console.log(`  Platform:      ${platform} (Tier ${platform === 'claude-code' || platform === 'codex' ? '1' : '2'})`);
+    const tierOne = ['claude-code', 'codex', 'minimax-code'].includes(platform);
+    console.log(`  Platform:      ${platform} (Tier ${tierOne ? '1' : '2'})`);
     console.log(`  Constitution:  ${constitution}`);
     console.log(`  Extensions:    ${extensions.length > 0 ? extensions.join(', ') : '(none)'}`);
     console.log('');

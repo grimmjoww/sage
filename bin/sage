@@ -327,9 +327,6 @@ select_platform() {
     # `--platform ","`) yields an empty FLAG_LIST; bash 3.2 aborts.
     for p in ${FLAG_LIST[@]+"${FLAG_LIST[@]}"}; do
       case "$p" in
-        claude-code|generic|antigravity|codex|opencode|gemini-cli|zcode)
-          PLATFORMS+=("$p")
-          ;;
         both)
           PLATFORMS+=("claude-code" "antigravity")
           ;;
@@ -337,7 +334,14 @@ select_platform() {
           PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli")
           ;;
         *)
-          echo -e "  ${YELLOW}Unknown platform: $p (supported: claude-code, antigravity, codex, opencode, gemini-cli, zcode)${RESET}"
+          # Accept any platform slug and let run_generators() decide. This used
+          # to be a hardcoded allowlist, so `--platform minimax-code` printed
+          # "Unknown platform", left PLATFORMS empty, fell through to
+          # auto-detection, and silently installed a Claude Code tree instead —
+          # the same defect the conformance suite exists to catch, and the
+          # reason a correct `hermes` generator was never invoked either.
+          # run_generators() already reports a missing generator by name.
+          PLATFORMS+=("$p")
           ;;
       esac
     done
@@ -690,7 +694,14 @@ run_generators() {
       opencode)    platforms_to_run=("opencode") ;;
       gemini-cli)  platforms_to_run=("gemini-cli") ;;
       zcode)        platforms_to_run=("zcode") ;;
-      *)           platforms_to_run=("claude-code") ;;
+      minimax-code) platforms_to_run=("minimax-code") ;;
+      hermes)       platforms_to_run=("hermes") ;;
+      # A platform with no generator must say so. Falling through to
+      # "claude-code" here silently installed a Claude Code tree for an
+      # unknown platform — the exact defect conformance Level 1 exists to
+      # catch, and it is how `minimax-code` appeared to generate while
+      # writing no AGENTS.md at all.
+      *)            platforms_to_run=("$PLATFORM") ;;
     esac
   fi
 
@@ -1589,6 +1600,10 @@ _sage_memory_install() {
     case "$p" in
       claude-code) cfg="$target/.mcp.json" ;;
       cursor)      cfg="$target/.cursor/mcp.json" ;;
+      # MiniMax Code reads the same project-level .mcp.json as Claude Code.
+      # Without this it fell through to `*)` and printed a manual snippet
+      # instead of merging, even though an exactly safe merge was available.
+      minimax-code) cfg="$target/.mcp.json" ;;
       *)           cfg="" ;;   # other platforms: no safe auto-merge → manual
     esac
     if [ -z "$cfg" ]; then need_manual=1; continue; fi
