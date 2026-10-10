@@ -36,6 +36,16 @@ N_PASS=0; N_FAIL=0; N_XFAIL=0; N_XPASS=0
 FAILED_IDS=""
 
 # ── fixture builders ──────────────────────────────────────────────────────
+# A host sends paths in the host's OWN format. Under MSYS the fixture lives at
+# a /tmp path that a native Windows python3 cannot open — and JSON on stdin is
+# never rewritten by MSYS the way an argv path would be. So a payload carrying
+# "$P" verbatim makes the hook compare a POSIX file_path against a Windows
+# project root, commonpath() raises, and the hook exits 0 having done nothing.
+# Convert before the path goes into a payload.
+native_path() {
+  if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi
+}
+
 new_project() {
   local d; d="$(mktemp -d "${TMPDIR:-/tmp}/sage-hooktest-XXXXXX")/proj"
   mkdir -p "$d/.sage/work" "$d/src"
@@ -304,7 +314,7 @@ assert H16 "a pre-upgrade manifest with no qa field still completes" "$P" \
 P=$(new_project); add_manifest "$P" demo gates-passed in-progress skipped-no-subagent
 : > "$P/.sage/decisions.md"
 assert H17 "the degradation hook records a declared skip" "$P" \
-  '{"tool_name":"Edit","tool_input":{"file_path":"'"$P"'/.sage/work/demo/manifest.md"}}' \
+  '{"tool_name":"Edit","tool_input":{"file_path":"'"$(native_path "$P")"'/.sage/work/demo/manifest.md"}}' \
   --hook "$DEG_LOG" --exit 0 --stderr "recorded a degraded completion"
 if [ -z "$ONLY" ] || [ "$ONLY" = "H17b" ]; then
   if grep -Fq "auto-logged by sage-degradation-log" "$P/.sage/decisions.md" 2>/dev/null; then
@@ -771,7 +781,7 @@ mk_laned_bk() {  # a bookkeeping fixture whose manifest carries a lanes block
 
 P="$(mk_laned_bk)"
 assert B21 "a lane process editing the main checkout's manifest is redirected (single-writer)" "$P/../wt-t2" \
-  "{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"$P/.sage/work/bkl/manifest.md\",\"new_string\":\"    status: done\"}}" \
+  "{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"$(native_path "$P")/.sage/work/bkl/manifest.md\",\"new_string\":\"    status: done\"}}" \
   --env "CLAUDE_PROJECT_DIR=$P" \
   --exit 2 --stderr "close-out" --hook "$BKG"
 
@@ -1547,10 +1557,10 @@ assert SC26 "a hand-forged wildcard collateral entry is ignored (still blocked)"
 if [ -z "$ONLY" ] || [ "$ONLY" = "SC24" ]; then
   P=$(new_project); scope_config "$P"; add_scoped_manifest "$P" fresh building
   SHA=$(python3 -c "
-import hashlib, re
-text = open('$P/.sage/work/fresh/plan.md', encoding='utf-8').read()
-decl = re.findall(r'(?m)^\s*-\s*\*\*(?:Files|Output)\s*:?\*\*:?\s*.*$', text)
-print(hashlib.sha1('\n'.join(l.strip() for l in decl).encode()).hexdigest()[:8])")
+import hashlib, re, sys
+text = open(sys.argv[1], encoding='utf-8').read()
+decl = re.findall(r'(?m)^\s*-\s*\*\*(?:Files|Output)\s*:?\*\*:?\s*.*\$', text)
+print(hashlib.sha1('\n'.join(l.strip() for l in decl).encode()).hexdigest()[:8])" "$P/.sage/work/fresh/plan.md")
   python3 - "$P" "$SHA" <<'PYEOF'
 import sys
 p, sha = sys.argv[1], sys.argv[2]
