@@ -58,7 +58,7 @@ if tool in ("edit", "write", "Edit", "Write", "MultiEdit", "NotebookEdit"):
             seg in ("/.sage/", "/sage/", "/.claude/", "/node_modules/")
             for seg in ["/" + p + "/" for p in rel.split("/")[:-1]]):
         key = "last_source_edit"
-elif tool == "Bash":
+elif tool in ("Bash", "bash"):
     if TEST_CMD.search(str(tool_input.get("command") or "")):
         key = "last_test_run"
 
