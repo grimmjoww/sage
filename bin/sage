@@ -361,19 +361,21 @@ select_platform() {
     echo ""
     echo "  Which platform are you using? Pick one:"
     echo "    [1] Claude Code           (first-class — full quality chain)"
-    echo "    [2] Antigravity (Google)  (community — experimental)"
-    echo "    [3] Codex (OpenAI)        (community — experimental)"
-    echo "    [4] Opencode              (community — experimental)"
-    echo "    [5] Gemini CLI            (community — experimental)"
-    echo "    [6] Multiple — install for all"
+    echo "    [2] Hermes Agent          (first-class — live gate enforcement via the plugin surface)"
+    echo "    [3] Antigravity (Google)  (community — experimental)"
+    echo "    [4] Codex (OpenAI)        (community — experimental)"
+    echo "    [5] Opencode              (community — experimental)"
+    echo "    [6] Gemini CLI            (community — experimental)"
+    echo "    [7] Multiple — install for all"
     printf "  > "
     read -r choice
     case "$choice" in
-      2) PLATFORMS=("antigravity") ;;
-      3) PLATFORMS=("codex") ;;
-      4) PLATFORMS=("opencode") ;;
-      5) PLATFORMS=("gemini-cli") ;;
-      6) PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli") ;;
+      2) PLATFORMS=("hermes") ;;
+      3) PLATFORMS=("antigravity") ;;
+      4) PLATFORMS=("codex") ;;
+      5) PLATFORMS=("opencode") ;;
+      6) PLATFORMS=("gemini-cli") ;;
+      7) PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli" "hermes") ;;
       *) PLATFORMS=("claude-code") ;;
     esac
     PLATFORM=$(printf '%s\n' ${PLATFORMS[@]+"${PLATFORMS[@]}"} | tr '\n' '+' | sed 's/+$//')
@@ -715,7 +717,13 @@ run_generators() {
       case "$script" in
         */community/*) echo -e "  ${YELLOW}⚠ $p is community-maintained (experimental) — generation only, no quality chain.${RESET}" ;;
       esac
-      bash "$script" "$target"
+      # Hermes-only: forward --profile <name> so the generator can install
+      # the plugin into the named profile under the resolved HERMES_HOME.
+      local extra_args=()
+      if [ "$p" = "hermes" ] && [ -n "${PROFILE_FLAG:-}" ]; then
+        extra_args=(--profile "$PROFILE_FLAG")
+      fi
+      bash "$script" "$target" ${extra_args[@]+"${extra_args[@]}"}
     else
       echo -e "  ${YELLOW}⚠ Generator not found: $script${RESET}"
     fi
@@ -1792,7 +1800,8 @@ sage_help() {
   echo "Flags:"
   echo "  --prefix                         Namespace commands as sage:build, sage:fix, etc."
   echo "  --preset <name>                  Set constitution preset (base|startup|enterprise|opensource)"
-  echo "  --platform <list>                Comma-separated platforms (claude-code|antigravity|codex|opencode|gemini-cli|zcode|all)"
+  echo "  --platform <list>                Comma-separated platforms (claude-code|antigravity|codex|opencode|gemini-cli|zcode|hermes|all)"
+  echo "  --profile <name>                 (Hermes) target profile under \$HERMES_HOME (or ~/.hermes); copies the plugin into it"
   echo ""
   echo "Examples:"
   echo "  sage new my-app                  # Create project with Sage"
@@ -2165,6 +2174,9 @@ PRESET_FLAG=""
 PREFIX_FLAG=""
 PLATFORM_FLAG=""
 NO_MEMORY_FLAG=""
+# --profile <name>: hermes-only; resolves a Hermes profile under $HERMES_HOME
+# (falls back to ~/.hermes) and copies the Sage plugin into its plugins dir.
+PROFILE_FLAG=""
 REMAINING_ARGS=()
 NEXT_IS=""
 for arg in "$@"; do
@@ -2172,6 +2184,7 @@ for arg in "$@"; do
     case "$NEXT_IS" in
       preset)   PRESET_FLAG="$arg" ;;
       platform) PLATFORM_FLAG="$arg" ;;
+      profile)  PROFILE_FLAG="$arg" ;;
     esac
     NEXT_IS=""
     continue
@@ -2181,6 +2194,8 @@ for arg in "$@"; do
     --preset)     NEXT_IS="preset" ;;
     --platform=*) PLATFORM_FLAG="${arg#--platform=}" ;;
     --platform)   NEXT_IS="platform" ;;
+    --profile=*)  PROFILE_FLAG="${arg#--profile=}" ;;
+    --profile)    NEXT_IS="profile" ;;
     --prefix)     PREFIX_FLAG="true" ;;
     --no-memory)  NO_MEMORY_FLAG="true" ;;
     *)            REMAINING_ARGS+=("$arg") ;;

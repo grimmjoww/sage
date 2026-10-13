@@ -14,14 +14,43 @@
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
-PROJECT_ROOT="${1:-.}"
+# Args: <project-root> [--profile <name>] [--profile=<name>]
+# --profile: install the Sage plugin into $HERMES_HOME/profiles/<name>/plugins/sage
+# instead of just printing manual copy instructions.
+PROJECT_ROOT=""
+PROFILE_NAME=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --profile=*) PROFILE_NAME="${1#--profile=}" ;;
+    --profile)
+      [ $# -ge 2 ] || { echo -e "  ${RED}❌ --profile requires a name${RESET}" >&2; exit 1; }
+      PROFILE_NAME="$2"
+      shift
+      ;;
+    *)
+      [ -z "$PROJECT_ROOT" ] && PROJECT_ROOT="$1"
+      ;;
+  esac
+  shift
+done
+PROJECT_ROOT="${PROJECT_ROOT:-.}"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLATFORM_ROOT="$(dirname "$SCRIPT_DIR")"
-SAGE_ROOT="$(cd "$PLATFORM_ROOT/../../.." && pwd)"
+# Hermes lives 4 levels below the repo root: sage/runtime/platforms/community/hermes.
+# Four `..`s, not three — three lands on `sage/runtime` and only the runtime/
+# subdirs make it into the installed plugin (caught 2026-10-13 via `bash -x`).
+SAGE_ROOT="$(cd "$PLATFORM_ROOT/../../../.." && pwd)"
+
+# Resolve Hermes home: $HERMES_HOME if set, else ~/.hermes.
+# This is where Hermes stores profiles/, and where Sage must land its plugin.
+HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
 
 BOLD='\033[1m'
 GREEN='\033[32m'
 CYAN='\033[36m'
+RED='\033[31m'
+YELLOW='\033[33m'
 RESET='\033[0m'
 
 echo ""
@@ -157,19 +186,53 @@ else
   echo -e "  ${CYAN}⊘${RESET} SOUL.md already exists, skipping"
 fi
 
-# ── Print next steps ──
+# ── Print next steps / install plugin into the named profile ──
 echo ""
-echo -e "  ${BOLD}Next steps:${RESET}"
-echo ""
-echo -e "  1. ${CYAN}Copy the Sage plugin to your Hermes profile:${RESET}"
-echo "     cp -r $SAGE_ROOT ~/.hermes/profiles/<your-profile>/plugins/sage/"
-echo ""
-echo -e "  2. ${CYAN}Enable the plugin:${RESET}"
-echo "     hermes plugins enable sage"
-echo ""
-echo -e "  3. ${CYAN}Start a Sage workflow:${RESET}"
-echo "     hermes"
-echo "     > /sage build a REST API for user authentication"
-echo ""
+if [ -n "$PROFILE_NAME" ]; then
+  PROFILES_ROOT="$HERMES_HOME/profiles"
+  PROFILE_DIR="$PROFILES_ROOT/$PROFILE_NAME"
+  if [ ! -d "$PROFILE_DIR" ]; then
+    echo -e "  ${RED}❌ Profile '$PROFILE_NAME' not found under $HERMES_HOME.${RESET}" >&2
+    echo "" >&2
+    echo -e "  ${BOLD}Profiles that exist there:${RESET}" >&2
+    if [ -d "$PROFILES_ROOT" ]; then
+      for p in "$PROFILES_ROOT"/*; do
+        [ -d "$p" ] && echo "    - $(basename "$p")" >&2
+      done
+    else
+      echo "    (no profiles/ directory under $HERMES_HOME)" >&2
+    fi
+    echo "" >&2
+    echo "  Create the profile first, then re-run with --profile $PROFILE_NAME." >&2
+    exit 1
+  fi
+  PLUGIN_DIR="$PROFILE_DIR/plugins/sage"
+  mkdir -p "$(dirname "$PLUGIN_DIR")"
+  rm -rf "$PLUGIN_DIR"
+  mkdir -p "$PLUGIN_DIR"
+  # `cp -a SRC DEST` when DEST exists puts SRC *as a subdir* of DEST on GNU
+  # cp — we want DEST to receive SRC's contents, so we copy SRC/.'s contents.
+  cp -a "$SAGE_ROOT/." "$PLUGIN_DIR/"
+  echo -e "  ${GREEN}✓${RESET} Installed Sage plugin → ${CYAN}$PLUGIN_DIR${RESET}"
+  echo ""
+  echo -e "  ${BOLD}Enable the plugin:${RESET}"
+  echo "    hermes plugins enable sage"
+  echo ""
+else
+  echo -e "  ${BOLD}Next steps:${RESET}"
+  echo ""
+  echo -e "  1. ${CYAN}Copy the Sage plugin to your Hermes profile:${RESET}"
+  echo "     cp -r \"$SAGE_ROOT\" \"$HERMES_HOME/profiles/<your-profile>/plugins/sage/\""
+  echo ""
+  echo -e "     (Hermes home resolved as: ${CYAN}$HERMES_HOME${RESET})"
+  echo ""
+  echo -e "  2. ${CYAN}Enable the plugin:${RESET}"
+  echo "     hermes plugins enable sage"
+  echo ""
+  echo -e "  3. ${CYAN}Start a Sage workflow:${RESET}"
+  echo "     hermes"
+  echo "     > /sage build a REST API for user authentication"
+  echo ""
+fi
 echo -e "  ${GREEN}✓${RESET} Sage for Hermes Agent initialized successfully!"
 echo ""
